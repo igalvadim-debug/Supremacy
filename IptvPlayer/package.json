@@ -1,0 +1,21 @@
+{
+  "name": "iptv-player",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IPTV-плеер для Android TV на базе Capacitor",
+  "scripts": {
+    "vendor": "node scripts/copy-vendor.mjs",
+    "sync": "npm run vendor && cap sync android",
+    "open": "cap open android",
+    "apk": "npm run sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "hls.js": "1.5.20"
+  }
+}
