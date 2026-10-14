@@ -1,1 +1,39 @@
-.gitignore
+# Dependency directories (Sehr wichtig!)
+node_modules/
+jspm_packages/
+web_modules/
+
+# Build-Ordner und generierte Web-Assets
+www/
+dist/
+build/
+out/
+
+# Android-spezifische Build-Dateien (Falls Sie den Ordner "android" hinzufügen)
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aar
+*.keystore
+
+# IDEs und Editoren
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Log-Dateien
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db
+
