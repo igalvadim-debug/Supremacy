@@ -4,8 +4,8 @@
 'use strict';
 var $ = function (id) { return document.getElementById(id); };
 /* Типизированный доступ к элементам форм: значения/файлы читаются только после проверки тега. */
-function val(id) { var e = $(id); return (e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement) ? e.value : ''; }
-function fileAt(id, i) { var e = $(id); return (e instanceof HTMLInputElement && e.files) ? e.files[i] : null; }
+function val(id: string): string { var e = $(id); return (e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement) ? e.value : ''; }
+function fileAt(id: string, i: number): File | null { var e = $(id); return (e instanceof HTMLInputElement && e.files) ? e.files.item(i) : null; }
 function api(q) {
   return fetch('/api/remote?' + q, { cache: 'no-store' }).then(function (r) { return r.json(); });
 }
@@ -143,13 +143,14 @@ $('plreset').onclick = function () {
 };
 
 /* Связка чекбокса группы с её ключом — типизированная (WeakMap вместо custom-свойства _key). */
-var chkKeys = new WeakMap();
+var chkKeys = new WeakMap<HTMLInputElement, string>();
 function renderGroupsList(s) {
   var box = $('glist');
   if (!box) return;
   box.textContent = '';
   var sel = $('mtarget');
-  var prev = val('mtarget');
+  if (!(sel instanceof HTMLSelectElement)) return;
+  var prev = sel.value;
   sel.textContent = '';
   (s.groups || []).forEach(function (gr) {
     var row = el('div', 'it');
@@ -171,7 +172,7 @@ function renderGroupsList(s) {
 }
 $('mmerge').onclick = function () {
   var target = val('mtarget');
-  var srcs = Array.prototype.slice.call(document.querySelectorAll('#glist input.mchk:checked')).map(function (c) { return chkKeys.get(c); }).filter(function (k) { return k !== undefined; });
+  var srcs = Array.from(document.querySelectorAll<HTMLInputElement>('#glist input.mchk:checked')).map(function (c) { return chkKeys.get(c); }).filter(function (k): k is string { return k !== undefined; });
   if (!srcs.length) { $('gmsg').textContent = 'Отметьте группы для объединения'; return; }
   api('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|'))).then(function (s) { $('gmsg').textContent = 'Объединено каналов: ' + ((s && s.moved) || 0); render(s); });
 };
