@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Каталог проекта. __dirname недоступен в ESM-конфигах (package.json "type": "module"),
+// поэтому корень вычисляем из import.meta.url.
+const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 /**
  * Конфигурация Vite для много-страничного приложения IPTV Player.
@@ -16,9 +21,9 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
-        index: resolve(__dirname, 'index.html'),
-        remote: resolve(__dirname, 'remote.html'),
-        'server-page': resolve(__dirname, 'server-page.html'),
+        index: resolve(rootDir, 'index.html'),
+        remote: resolve(rootDir, 'remote.html'),
+        'server-page': resolve(rootDir, 'server-page.html'),
       },
     },
   },

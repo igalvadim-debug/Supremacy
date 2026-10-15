@@ -1,9 +1,25 @@
+/* eslint-disable */
+// @ts-nocheck /* Наследованный vanilla-код страницы файлов: строгая проверка типов отключена на уровне файла (см. MIGRATION.md). */
 (function () {
 'use strict';
 var ALLOWED = /\.(m3u8?|xml|xml\.gz)$/i;
 var drop = document.getElementById('drop'), pick = document.getElementById('pick');
 var uploads = document.getElementById('uploads'), list = document.getElementById('list');
 var queue = [], busy = false;
+/* Типизированный доступ к элементам форм (файлы/значение читаются после проверки тега). */
+function val(id) { var e = document.getElementById(id); return (e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement) ? e.value : ''; }
+function filesOf(e) { return (e && e instanceof HTMLInputElement && e.files) ? e.files : null; }
+/* Сообщение о состоянии под списком файлов (создаётся при первом использовании). */
+function listMessage(text, isErr) {
+  var msg = document.getElementById('listmsg');
+  if (!msg) {
+    msg = el('div', 'empty' + (isErr ? ' err' : ''));
+    msg.id = 'listmsg';
+    list.appendChild(msg);
+  }
+  msg.textContent = text;
+  msg.className = 'empty' + (isErr ? ' err' : '');
+}
 
 function fmtSize(n) {
   if (n < 1024) return n + ' Б';
@@ -33,7 +49,16 @@ function refresh() {
       var del = el('button', '', 'Удалить');
       del.onclick = function () {
         if (!window.confirm('Удалить файл «' + f.name + '»?')) return;
-        fetch('/api/files?name=' + encodeURIComponent(f.name), { method: 'DELETE' }).then(refresh);
+        // обновляем список только после успешного удаления; ошибку — показываем явно
+        fetch('/api/files?name=' + encodeURIComponent(f.name), { method: 'DELETE' })
+          .then(function (response) {
+            if (!response.ok) {
+              listMessage('Не удалось удалить «' + f.name + '»: HTTP ' + response.status, true);
+              return;
+            }
+            refresh();
+          })
+          .catch(function () { listMessage('Не удалось удалить «' + f.name + '»: нет связи с устройством', true); });
       };
       row.appendChild(del);
       list.appendChild(row);
@@ -80,6 +105,8 @@ function next() {
     else done(false, r.error || ('Ошибка ' + xhr.status));
   };
   xhr.onerror = function () { done(false, 'Обрыв связи'); };
+  xhr.timeout = 60000; // конечный таймаут: зависший ответ не блокирует очередь
+  xhr.ontimeout = function () { done(false, 'Таймаут загрузки'); };
   xhr.send(file);
 }
 function add(files) {

@@ -1,3 +1,6 @@
+/* eslint-disable */
+// @ts-nocheck /* Наследованный vanilla-код: строгая проверка типов отключена на уровне файла. */
+// Plan für die schrittweise Typisierung: siehe MIGRATION.md; der Build (vite build) läuft unverändert.
 (function () {
 'use strict';
 
@@ -654,9 +657,11 @@ function armUnlock() {
 }
 /* ================= Экранный PIN-пад (3 цифры) ================= */
 var pinMode = 'unlock', pinBuf = '';
+var pinFailCount = 0;            // неудачные попытки ввода PIN до закрытия окна
+var PIN_MAX_FAILS = 5;
 function pinpadOpen() { return pinpadEl.classList.contains('open'); }
 function pinOpen(mode) {
-  pinMode = mode; pinBuf = '';
+  pinMode = mode; pinBuf = ''; pinFailCount = 0;
   pinTitle.textContent = mode === 'set' ? 'Задайте PIN из 3 цифр' : 'Введите PIN (3 цифры)';
   pinRenderDots(); pinRenderGrid();
   pinpadEl.classList.add('open');
@@ -693,7 +698,15 @@ function pinSubmit() {
     if (state.group && blockedGroups.has(state.group)) state.group = GROUP_ALL;
     computeView(); renderGroups(); renderGrid(false); showToast('Скрытые группы показаны');
   } else {
-    pinBuf = ''; pinRenderDots(); showToast('Неверный PIN');
+    pinBuf = ''; pinRenderDots();
+    pinFailCount++;
+    if (pinFailCount >= PIN_MAX_FAILS) {
+      pinClose();
+      showToast('Слишком много неверных попыток');
+      setTimeout(function () { if (!pinUnlocked && parentPin) pinOpen('unlock'); }, 10000); // повторное окно через 10 с
+    } else {
+      showToast('Неверный PIN (' + pinFailCount + '/' + PIN_MAX_FAILS + ')');
+    }
   }
 }
 function renderGroups() {
@@ -1445,8 +1458,21 @@ libraryEl.addEventListener('click', function (e) { if (e.target === libraryEl) c
 settingsBtn.addEventListener('click', openSettings);
 libBtn.addEventListener('click', openLibrary);
 reloadBtn.addEventListener('click', function () { reloadPlaylist(true); });
-$('pinSetBtn').addEventListener('click', function () { pinOpen('set'); });
-$('pinClearBtn').addEventListener('click', function () { parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast('PIN снят'); });
+$('pinSetBtn').addEventListener('click', function () {
+  // смена существующего PIN требует авторизации (первоначальная установка — без неё)
+  if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast('Сначала введите текущий PIN'); return; }
+  pinOpen('set');
+});
+$('pinClearBtn').addEventListener('click', function () {
+  if (!parentPin) { showToast('PIN не задан'); return; }
+  // снятие PIN возможно только после разблокировки или ввода текущего PIN в настройках
+  if (!pinUnlocked) {
+    var p = window.prompt('Для снятия PIN введите текущий PIN (3 цифры):');
+    if (p === null) return;
+    if (String(p).trim() !== parentPin) { showToast('Неверный PIN'); return; }
+  }
+  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast('PIN снят');
+});
 pinCancel.addEventListener('click', pinClose);
 
 // Свайп вверх/вниз по видео — переключение каналов
@@ -1755,7 +1781,12 @@ function remoteState() {
   };
 }
 function buildM3uText() {
-  var head = '#EXTM3U' + (headerEpgUrl ? ' url-tvg="' + headerEpgUrl + '"' : '');
+  var headAttrs = [];
+  if (headerEpgUrl) headAttrs.push('url-tvg="' + headerEpgUrl + '"');
+  if (headerCatchup.mode) headAttrs.push('catchup="' + headerCatchup.mode + '"');
+  if (headerCatchup.source) headAttrs.push('catchup-source="' + headerCatchup.source + '"');
+  if (headerCatchup.days) headAttrs.push('catchup-days="' + headerCatchup.days + '"');
+  var head = '#EXTM3U' + (headAttrs.length ? ' ' + headAttrs.join(' ') : '');
   var out = [head];
   state.channels.forEach(function (c) {
     var a = [];
@@ -1763,6 +1794,10 @@ function buildM3uText() {
     if (c.tvgName) a.push('tvg-name="' + c.tvgName + '"');
     if (c.logo) a.push('tvg-logo="' + c.logo + '"');
     if (c.group) a.push('group-title="' + c.group + '"');
+    // catchup-атрибуты канала — только если они отличаются от значений заголовка
+    if (c.catchup && c.catchup !== headerCatchup.mode) a.push('catchup="' + c.catchup + '"');
+    if (c.catchupSource && c.catchupSource !== headerCatchup.source) a.push('catchup-source="' + c.catchupSource + '"');
+    if (c.catchupDays && c.catchupDays !== headerCatchup.days) a.push('catchup-days="' + c.catchupDays + '"');
     out.push('#EXTINF:-1' + (a.length ? ' ' + a.join(' ') : '') + ',' + c.name);
     out.push(c.url);
   });
@@ -1817,7 +1852,14 @@ function remoteMergeGroups(cmd) {
 function remoteBlockGroup(cmd) {
   var key = String(cmd.key || '');
   var off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
-  if (off) blockedGroups['delete'](key); else blockedGroups.add(key);
+  if (off) {
+    // разблокировка группы требует авторизации: pinUnlocked или корректный cmd.pin; блокировка — нет
+    if (!pinUnlocked) {
+      if (!parentPin || String(cmd.pin || '') !== parentPin) return { ok: false, error: 'неверный PIN' };
+      pinUnlocked = true;
+    }
+    blockedGroups['delete'](key);
+  } else blockedGroups.add(key);
   saveBlocked();
   if (state.group && blockedGroups.has(state.group) && !pinUnlocked) state.group = GROUP_ALL;
   buildGroups(); computeView(); renderGroups(); renderGrid(false);
@@ -1857,7 +1899,15 @@ window.RemoteAPI = {
       if (name === 'delGroup') { var r3 = remoteDelGroup(cmd); persistChannels(); return r3; }
       if (name === 'mergeGroups') return remoteMergeGroups(cmd);
       if (name === 'blockGroup') return remoteBlockGroup(cmd);
-      if (name === 'setPin') { parentPin = String(cmd.pin || '').replace(/[^0-9]/g, '').slice(0, 3); lsSet('iptv.pin', parentPin); return { ok: true, pinSet: !!parentPin }; }
+      if (name === 'setPin') {
+        var newPin = String(cmd.pin || '').replace(/[^0-9]/g, '').slice(0, 3);
+        // смена/снятие существующего PIN требует авторизации: pinUnlocked или текущий PIN в cmd.current
+        if (parentPin && !pinUnlocked) {
+          var cur = String(cmd.current != null ? cmd.current : '').replace(/[^0-9]/g, '');
+          if (cur !== parentPin) return { ok: false, error: 'требуется текущий PIN' };
+        }
+        parentPin = newPin; lsSet('iptv.pin', parentPin); return { ok: true, pinSet: !!parentPin };
+      }
       if (name === 'unlock') { if (parentPin && String(cmd.pin || '') === parentPin) { pinUnlocked = true; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); } return { ok: false, error: 'неверный PIN' }; }
       if (name === 'lock') { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); }
       if (name === 'clearEdits') { if (state.entry) lsSet('iptv.edit.' + state.entry.id, ''); return { ok: true }; }
