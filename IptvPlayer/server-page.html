@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPTV Player: файлы</title>
+<style>
+  :root { --bg:#0b0f19; --panel:#131a2b; --line:#2a3a5c; --text:#eaf0fb; --muted:#8f9bb5; --accent:#35c4ff; --accent2:#7a6cff; --ok:#5ee19a; --err:#ff7b8b; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:1.5rem 1rem 3rem; background: radial-gradient(circle at 15% 0%, #172a4a 0, var(--bg) 40rem); color:var(--text);
+    font-family: Roboto, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 48rem; margin: 0 auto; }
+  h1 { margin:0 0 .3rem; font-size:1.7rem; letter-spacing:.04em; }
+  h1 span { color: var(--accent); }
+  h2 { margin:2rem 0 .7rem; font-size:1.15rem; }
+  .sub { margin:0 0 1.2rem; color: var(--muted); }
+  #drop { padding:2.2rem 1rem; text-align:center; border:.15rem dashed var(--line); border-radius:1rem; background: rgba(19,26,43,.8); color: var(--muted); transition: .15s; }
+  #drop.over { border-color: var(--accent); color: var(--text); background: rgba(53,196,255,.08); }
+  #drop label { color: var(--accent); font-weight: 700; cursor: pointer; text-decoration: underline; }
+  #pick { display:none; }
+  .item { display:flex; align-items:center; gap:.8rem; padding:.7rem .9rem; margin-bottom:.5rem; border:.1rem solid var(--line); border-radius:.7rem; background: var(--panel); }
+  .item .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .item .name a { color: var(--text); text-decoration:none; }
+  .item .name a:hover { color: var(--accent); }
+  .item .meta { color: var(--muted); font-size:.85rem; white-space:nowrap; }
+  .item button { height:2.2rem; padding:0 .9rem; border:0; border-radius:.5rem; cursor:pointer; color:#fff; font-weight:700; background:#3a2631; }
+  .item button:hover { background:#7b2c3c; }
+  .bar { flex:0 0 9rem; height:.5rem; border-radius:.3rem; background:#0a1120; overflow:hidden; }
+  .bar b { display:block; height:100%; width:0; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+  .empty { padding:1.5rem; text-align:center; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>IPTV <span>Player</span>: файлы</h1>
+  <p class="sub">Плейлисты <b>.m3u</b>, <b>.m3u8</b> и телепрограмма <b>.xml</b>, <b>.xml.gz</b>. Файлы сохраняются в папку «Загрузки / IPTV Player» на устройстве.</p>
+
+  <div id="drop">Перетащите файлы сюда или <label for="pick">выберите на компьютере</label><input id="pick" type="file" multiple accept=".m3u,.m3u8,.xml,.gz"></div>
+  <div id="uploads" style="margin-top:1rem"></div>
+
+  <h2>Файлы на устройстве</h2>
+  <div id="list"><div class="empty">Загрузка…</div></div>
+</main>
+<script type="module" src="/src/server-page.ts"></script>
+</body>
+</html>
+

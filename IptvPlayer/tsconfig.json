@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    /* Современная сборка через Vite/esbuild */
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+
+    /* Строгая типизация включена ЧАСТИЧНО: ловим настоящие ошибки,
+       но не блокируем сборку из-за null-check'ов старого кода.
+       План: постепенно ужесточать до "strict": true (см. MIGRATION.md). */
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "useUnknownInCatchVariables": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUncheckedIndexedAccess": false,
+
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "noEmit": true,
+
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "vite.config.ts",
+    "capacitor.config.ts"
+  ]
+}
