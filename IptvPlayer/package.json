@@ -2,10 +2,16 @@
   "name": "iptv-player",
   "version": "1.0.0",
   "private": true,
-  "description": "IPTV-плеер для Android TV на базе Capacitor",
+  "type": "module",
+  "description": "IPTV-плеер для Android TV на базе Capacitor (Vite + TypeScript)",
   "scripts": {
+    "dev": "vite",
     "vendor": "node scripts/copy-vendor.mjs",
-    "sync": "npm run vendor && cap sync android",
+    "prebuild": "npm run vendor",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "sync": "npm run build && cap sync android",
     "open": "cap open android",
     "apk": "npm run sync && cd android && gradlew.bat assembleDebug"
   },
@@ -16,6 +22,10 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
-    "hls.js": "1.5.20"
+    "@types/node": "^22.10.2",
+    "hls.js": "1.5.20",
+    "qrcode-generator": "1.4.4",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.0"
   }
 }
