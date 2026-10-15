@@ -37,8 +37,11 @@ var epgChk = $('epgChk'), epgInfoEl = $('epgInfo'), srvChk = $('srvChk'), srvAdd
 var libraryEl = $('library'), libList = $('libList'), fileList = $('fileList'), srvBtn = $('srvBtn'), srvInfo = $('srvInfo');
 
 /* ================= Утилиты ================= */
+/** Reads a stored value, returning an empty string for missing keys or storage errors. */
 function lsGet(key) { try { return window.localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+/** Stores a value, silently ignoring storage errors. */
 function lsSet(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { /* хранилище недоступно */ } }
+/** Parses a base-10 integer, uses def if parsing fails, and clamps to the inclusive min/max bounds. */
 function toInt(v, def, min, max) {
   var n = parseInt(v, 10);
   if (isNaN(n)) n = def;
@@ -51,6 +54,7 @@ function mk(tag, cls, text) {
   return e;
 }
 function setStatus(text, kind) { statusEl.textContent = text; statusEl.className = kind || ''; }
+/** Returns the Russian noun form for a channel count. */
 function plural(n) {
   var m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return 'канал';
@@ -65,6 +69,7 @@ function appPlugin() {
 }
 // Собственный нативный плагин (файловый сервер, папка «Загрузки», EPG). В обычном браузере его нет.
 var nativeP;
+/** Returns the cached IptvNative bridge, or null if unavailable or registration throws. */
 function native() {
   if (nativeP !== undefined) return nativeP;
   nativeP = null;
@@ -75,6 +80,7 @@ function native() {
   return nativeP;
 }
 var nativePlayerP;
+/** Returns the cached IptvPlayer bridge, or null if unavailable or registration throws. */
 function playerPlugin() {
   if (nativePlayerP !== undefined) return nativePlayerP;
   nativePlayerP = null;
@@ -85,6 +91,7 @@ function playerPlugin() {
   return nativePlayerP;
 }
 var toastTimer = null;
+/** Shows a message for ms milliseconds; a missing or zero duration uses 2,200 ms. */
 function showToast(text, ms) {
   toastEl.textContent = text;
   toastEl.classList.add('show');
@@ -92,13 +99,17 @@ function showToast(text, ms) {
   toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2200);
 }
 function isText(el) { return !!el && el.tagName === 'INPUT' && el.type === 'text'; }
+/** Formats a Unix timestamp in milliseconds as a Russian hour/minute string in the local time zone. */
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+/** Formats a Unix timestamp in milliseconds as a Russian day/month and time in the local time zone. */
 function fmtDateTime(ms) { return new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+/** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
 function fmtSize(n) {
   if (n < 1024) return n + ' Б';
   if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
   return (n / 1048576).toFixed(1) + ' МБ';
 }
+/** Returns a URL hostname and final path segment, or the original input if URL parsing fails. */
 function niceUrlName(url) {
   try {
     var u = new URL(url), last = u.pathname.split('/').filter(Boolean).pop() || '';
@@ -140,6 +151,10 @@ var gating = false, hasPlayed = false, swipedAt = 0, lpFired = false, lastAutoTr
 
 /* ================= Библиотека плейлистов (IndexedDB) ================= */
 var libDb = null;
+/**
+ * Opens or reuses the playlist database, creating its store on the first open.
+ * @returns A promise for the database; rejects when IndexedDB is unavailable or opening fails.
+ */
 function dbOpen() {
   return new Promise(function (resolve, reject) {
     if (libDb) { resolve(libDb); return; }
@@ -150,6 +165,11 @@ function dbOpen() {
     rq.onerror = function () { reject(rq.error); };
   });
 }
+/**
+ * Runs fn with the playlist store in the requested IndexedDB transaction mode.
+ * @returns A promise for the returned request's result after commit, or undefined if fn returns no request.
+ *   Database-open, transaction, and callback errors reject the promise.
+ */
 function dbTx(mode, fn) {
   return dbOpen().then(function (db) {
     return new Promise(function (resolve, reject) {
@@ -160,11 +180,19 @@ function dbTx(mode, fn) {
     });
   });
 }
+/** Stores or replaces a playlist by id; returns a promise for its key and propagates database errors. */
 function libPut(entry) { return dbTx('readwrite', function (st) { return st.put(entry); }); }
+/** Returns a promise for the playlist with this id, or undefined if absent; database errors propagate. */
 function libGet(id) { return dbTx('readonly', function (st) { return st.get(id); }); }
+/** Deletes a playlist by id; returns a promise for transaction completion and propagates database errors. */
 function libDel(id) { return dbTx('readwrite', function (st) { return st['delete'](id); }); }
+/** Returns a promise for all saved playlists; database errors propagate. */
 function libAll() { return dbTx('readonly', function (st) { return st.getAll(); }); }
 
+/**
+ * Starts saving a playlist copy under its source kind and key, without waiting for completion.
+ * The source key is a URL or filename; count is the parsed channel count. Save failures are ignored.
+ */
 function saveEntry(src, name, text, count) {
   var id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
   var entry = { id: id, kind: src.kind, name: name, url: src.kind === 'url' ? src.key : '', fileName: src.kind === 'file' ? src.key : '',
@@ -173,6 +201,7 @@ function saveEntry(src, name, text, count) {
 }
 
 /* ================= Парсер M3U ================= */
+/** Splits EXTINF content at the first comma outside double quotes; a missing comma yields an empty title. */
 function splitExtInf(body) {
   var inQuote = false;
   for (var i = 0; i < body.length; i++) {
@@ -182,11 +211,13 @@ function splitExtInf(body) {
   }
   return { head: body, title: '' };
 }
+/** Extracts double-quoted attributes with lowercase keys and trimmed values; later duplicates win. */
 function parseAttrs(head) {
   var attrs = {}, re = /([A-Za-z0-9_-]+)="([^"]*)"/g, m;
   while ((m = re.exec(head)) !== null) attrs[m[1].toLowerCase()] = m[2].trim();
   return attrs;
 }
+/** Derives a channel name from the decoded URL filename or hostname, returning the input on parse errors. */
 function guessName(url) {
   try {
     var u = new URL(url);
@@ -195,12 +226,18 @@ function guessName(url) {
     return last || u.hostname;
   } catch (e) { return url; }
 }
+/** Creates channel data with search keys, falling back to playlist header catch-up settings for falsy values. */
 function makeChannel(o) {
   var name = o.name || 'Без названия', group = o.group || '';
   return { name: name, url: o.url, logo: o.logo || '', group: group, tvgId: o.tvgId || '', tvgName: o.tvgName || '',
     catchup: o.catchup || headerCatchup.mode || '', catchupSource: o.catchupSource || headerCatchup.source || '', catchupDays: o.catchupDays || headerCatchup.days || 0,
     nameLower: name.toLowerCase(), groupLower: group.toLowerCase() };
 }
+/**
+ * Returns channels for HTTP(S) entries in M3U text, inferring names for bare URLs.
+ * Resets header catch-up defaults and updates the shared EPG URL when the header supplies an HTTP(S) URL.
+ * Unsupported URL schemes are skipped; missing metadata uses channel defaults.
+ */
 function parsePlaylist(text) {
   var lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
   var out = [], pending = null, extGrp = '';
@@ -250,6 +287,11 @@ function parsePlaylist(text) {
 }
 
 /* ================= Загрузка и обновление плейлиста ================= */
+/**
+ * Fetches playlist text through Capacitor HTTP when available, otherwise browser fetch.
+ * @returns A promise for the response text; non-string native data is JSON-serialized.
+ * @throws If the HTTP status is unsuccessful; request, response-reading, and serialization errors also propagate.
+ */
 async function fetchPlaylistText(url) {
   var http = nativeHttp();
   if (window.Capacitor && http) {
@@ -263,14 +305,20 @@ async function fetchPlaylistText(url) {
   if (!r.ok) throw new Error('сервер ответил HTTP ' + r.status);
   return await r.text();
 }
+/** Saves the current reload timestamp in milliseconds and refreshes its settings display. */
 function markReloaded() { lsSet(LS_RELOADED, String(Date.now())); updateLastReload(); }
+/** Formats a load error, substituting a browser CORS/network hint for TypeError when native HTTP is absent. */
 function netErrText(err) {
   var msg = errMsg(err);
   if (err instanceof TypeError && !nativeHttp()) msg = 'браузер заблокировал запрос (CORS или нет сети). В Android-приложении запрос идёт нативно.';
   return msg;
 }
 
-// cached — сохранённая копия из библиотеки: если сети нет, открываем её
+/**
+ * Loads the HTTP(S) URL from the input unless another load is active.
+ * On fetch or apply failure, tries cached.text if supplied; failures are displayed as status messages.
+ * Successful network loads save the playlist and update its reload timestamp.
+ */
 async function loadFromUrl(cached) {
   if (loading) return;
   var url = urlInput.value.trim();
@@ -297,7 +345,11 @@ async function loadFromUrl(cached) {
   }
 }
 
-// Обновление открытого плейлиста: каналы заменяются, воспроизведение, поиск, группа, избранное и позиция списка сохраняются
+/**
+ * Reloads the open URL or native file while retaining the search and rendered range.
+ * Errors become status messages. A truthy manual flag adds feedback and requests a forced EPG reload
+ * following the load attempt; an active load or missing entry returns early.
+ */
 async function reloadPlaylist(manual) {
   if (loading) { if (manual) showToast('Загрузка уже идёт…'); return; }
   var ent = state.entry;
@@ -331,6 +383,7 @@ async function reloadPlaylist(manual) {
   }
   if (manual) epgReload(true);
 }
+/** Reloads a URL playlist when its configured interval has elapsed, spacing automatic attempts by at least ten minutes. */
 function autoTick() {
   if (!settings.autoReload || loading) return;
   if (!state.entry || state.entry.kind !== 'url') return;
@@ -341,6 +394,7 @@ function autoTick() {
   }
 }
 
+/** Reads the first selected file as UTF-8 and applies it as a playlist, displaying read or apply errors in the UI. */
 function loadFromFile() {
   var file = fileInput.files && fileInput.files[0];
   if (!file) return;
@@ -355,7 +409,15 @@ function loadFromFile() {
   reader.readAsText(file, 'utf-8');
 }
 
-// src: { kind: 'url' | 'file', key: ссылка или имя файла }
+/**
+ * Replaces the channel list from M3U text, or treats a URL-backed HLS manifest as a single channel.
+ * Updates playlist identity, groups, grid, focus, and EPG scheduling without starting playback.
+ * @param sourceName Label shown in the load status.
+ * @param src Source kind and key (URL or filename), used for persistence and later reloads.
+ * @param opts keep preserves the search and rendered range and requests scroll restoration;
+ *   nosave skips saving a library copy. Both default to false.
+ * @throws If text is empty, looks like HTML, has no HTTP(S) channels, or is an HLS manifest without a source URL.
+ */
 function applyPlaylist(text, sourceName, src, opts) {
   opts = opts || {};
   var trimmed = text.replace(/^\uFEFF/, '').trim();
@@ -414,6 +476,7 @@ function applyPlaylist(text, sourceName, src, opts) {
 
 /* ================= Окно «Плейлисты» ================= */
 function libraryOpen() { return libraryEl.classList.contains('open'); }
+/** Opens the playlist library, loads saved entries and native files, and starts polling files every three seconds. */
 async function openLibrary() {
   if (settingsOpen()) closeSettings();
   libraryEl.classList.add('open');
@@ -432,7 +495,10 @@ function closeLibrary() {
   setFocus(libBtn, false);
 }
 
-// Двухшаговое удаление: первое нажатие просит подтверждения, второе удаляет
+/**
+ * Assigns a button action that requires a second activation within three seconds.
+ * The first activation shows a confirmation label; timeout restores label. Activation does not catch synchronous action errors.
+ */
 function twoStep(btn, label, action) {
   btn._armed = false;
   btn._act = function () {
@@ -449,6 +515,7 @@ function twoStep(btn, label, action) {
   };
 }
 
+/** Renders saved playlists newest first, treating database read failures as an empty library. */
 async function renderLibrary() {
   var entries = [];
   try { entries = await libAll(); } catch (e) { entries = []; }
@@ -480,6 +547,10 @@ async function renderLibrary() {
   if (focusedEl && !document.body.contains(focusedEl)) setFocus(srvBtn, false);
 }
 
+/**
+ * Renders native downloads and EPG selection, treating listing errors as an empty file list.
+ * A truthy force bypasses the unchanged-list check; without a native bridge, shows an availability message.
+ */
 async function renderFiles(force) {
   var n = native();
   if (!n) {
@@ -520,6 +591,11 @@ async function renderFiles(force) {
   if (focusedEl && !document.body.contains(focusedEl)) setFocus(srvBtn, false);
 }
 
+/**
+ * Opens a saved playlist, preferring stored edits and falling back to the original if edits cannot be applied.
+ * URL entries try the network before their saved copy. Read/apply failures are reported in the UI.
+ * A truthy startup leaves the library open rather than closing it before loading.
+ */
 async function openEntry(id, startup) {
   var e = null;
   try { e = await libGet(id); } catch (x) { e = null; }
@@ -539,6 +615,7 @@ async function openEntry(id, startup) {
     catch (err) { setStatus('Не удалось открыть «' + e.name + '»: ' + errMsg(err), 'error'); }
   }
 }
+/** Reads and applies a native download by filename; no-ops without the bridge and displays read/apply failures. */
 async function openDownloadFile(name) {
   var n = native();
   if (!n) return;
@@ -553,6 +630,7 @@ async function openDownloadFile(name) {
 }
 
 /* ================= Файловый сервер ================= */
+/** Returns the running server URL using its first address, or an empty string if stopped or no address is available. */
 function serverUrl() {
   if (!srv.running) return '';
   var ip = srv.addresses && srv.addresses[0];
@@ -573,6 +651,7 @@ function renderServerUi() {
   srvAddr.textContent = info;
   renderQr();
 }
+/** Displays the remote-control URL as a QR code, falling back to plain text if QR generation is unavailable or fails. */
 function renderQr() {
   var box = $('qrBox');
   if (!box) return;
@@ -597,11 +676,13 @@ function renderQr() {
   }
   box.textContent = u;
 }
+/** Refreshes server state from the native bridge, retaining the previous state on errors, then updates the UI. */
 async function refreshServerStatus() {
   var n = native();
   if (n) { try { srv = await n.serverStatus(); } catch (e) { /* оставляем прежнее состояние */ } }
   renderServerUi();
 }
+/** Starts or stops the native server and saves successful state changes; native failures are displayed as a toast. */
 async function setServer(on) {
   var n = native();
   if (!n) { showToast('Сервер доступен только в приложении'); renderServerUi(); return; }
@@ -623,7 +704,9 @@ async function setServer(on) {
 }
 
 /* ================= Группы и фильтр ================= */
+/** Returns the channel group, using GROUP_NONE for an empty group. */
 function gkey(ch) { return ch.group || GROUP_NONE; }
+/** Rebuilds group counts in playlist order, excluding blocked groups while the PIN is locked. */
 function buildGroups() {
   var counts = new Map(), order = [];
   state.channels.forEach(function (ch) {
@@ -634,6 +717,7 @@ function buildGroups() {
   });
   state.groups = order.map(function (k) { return { key: k, label: k === GROUP_NONE ? 'Без группы' : k, count: counts.get(k) }; });
 }
+/** Updates the channel view using PIN visibility, the selected group or favorites, and a case-insensitive name/group search. */
 function computeView() {
   var q = searchInput.value.trim().toLowerCase(), g = state.group, out = state.channels;
   if (!pinUnlocked && blockedGroups.size) out = out.filter(function (c) { return !blockedGroups.has(gkey(c)); });
@@ -650,6 +734,7 @@ function makeChip(key, label, count) {
   el.appendChild(mk('small', '', String(count)));
   return el;
 }
+/** Opens PIN setup if unset, relocks visible groups if unlocked, or prompts for the existing PIN. */
 function armUnlock() {
   if (!parentPin) { pinOpen('set'); return; }
   if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return; }
@@ -660,6 +745,7 @@ var pinMode = 'unlock', pinBuf = '';
 var pinFailCount = 0;            // неудачные попытки ввода PIN до закрытия окна
 var PIN_MAX_FAILS = 5;
 function pinpadOpen() { return pinpadEl.classList.contains('open'); }
+/** Opens a cleared PIN pad in setup mode for "set", or unlock mode otherwise. */
 function pinOpen(mode) {
   pinMode = mode; pinBuf = ''; pinFailCount = 0;
   pinTitle.textContent = mode === 'set' ? 'Задайте PIN из 3 цифр' : 'Введите PIN (3 цифры)';
@@ -675,6 +761,7 @@ function pinRenderDots() {
   pinDots.textContent = '';
   for (var i = 0; i < 3; i++) pinDots.appendChild(mk('i', i < pinBuf.length ? 'on' : ''));
 }
+/** Builds the PIN keypad, submitting automatically at three digits or on OK with three digits entered. */
 function pinRenderGrid() {
   pinGrid.textContent = '';
   ['1', '2', '3', '4', '5', '6', '7', '8', '9', '\u232B', '0', 'OK'].forEach(function (lab) {
@@ -688,6 +775,7 @@ function pinRenderGrid() {
     pinGrid.appendChild(b);
   });
 }
+/** Saves a new PIN or checks the entered PIN, revealing groups on success and clearing the input on mismatch. */
 function pinSubmit() {
   var v = pinBuf;
   if (pinMode === 'set') {
@@ -727,6 +815,7 @@ function renderGroups() {
   groupBar.appendChild(frag);
   if (focusedEl && !document.body.contains(focusedEl)) focusedEl = null;
 }
+/** Selects and saves a group key, resets pagination and scroll, and focuses its chip when present. */
 function setGroup(key) {
   state.group = key;
   lsSet(LS_GROUP, key);
@@ -742,6 +831,7 @@ function setGroup(key) {
   }
 }
 
+/** Toggles a channel URL in saved favorites and refreshes affected UI; a missing channel is ignored. */
 function toggleFav(ch) {
   if (!ch) return;
   var on;
@@ -754,6 +844,7 @@ function toggleFav(ch) {
   renderGroups();
   if (!on && state.group === GROUP_FAV && state.mode === 'menu') { computeView(); renderGrid(true); }
 }
+/** Handles the native remote Menu button by toggling the current or focused channel favorite, or prompting for a channel. */
 window.__iptvMenu = function () {          // кнопка «три полоски» на пульте (вызывается из MainActivity)
   if (state.mode === 'player' && state.current) { toggleFav(state.current); showOsd(); return; }
   if (focusedEl && focusedEl._channel) { toggleFav(focusedEl._channel); return; }
@@ -761,9 +852,11 @@ window.__iptvMenu = function () {          // кнопка «три полоск
 };
 
 /* ================= Сетка каналов ================= */
+/** Creates a logo placeholder from the first trimmed character, uppercased, or "?" for an empty name. */
 function placeholder(name) {
   return mk('span', 'ph', (name.trim().charAt(0) || '?').toUpperCase());
 }
+/** Builds a navigable channel card with favorite and EPG state, substituting a placeholder if its logo fails to load. */
 function createCard(ch) {
   var el = mk('div', 'card' + (isFav(ch) ? ' fav' : ''));
   el.setAttribute('data-nav', '1');
@@ -799,6 +892,7 @@ function createMoreCard(rest) {
   el.style.whiteSpace = 'pre-line';
   return el;
 }
+/** Rebuilds the paginated channel grid and schedules an EPG refresh; a truthy keepScroll restores the prior scroll offset. */
 function renderGrid(keepScroll) {
   var st = gridPane.scrollTop;
   grid.textContent = '';
@@ -832,6 +926,7 @@ function applyFilter() {
   state.renderCount = PAGE_SIZE;
   renderGrid(false);
 }
+/** Adds one page to the rendered range and focuses its first new channel, if present. */
 function showMore() {
   var firstNew = state.renderCount;
   state.renderCount += PAGE_SIZE;
@@ -853,10 +948,16 @@ function renderEpgInfo() {
   epgChk.checked = epg.enabled;
   epgChk.disabled = !native();
 }
+/** Debounces a non-forced EPG reload by 400 ms. */
 function scheduleEpgReload() {
   clearTimeout(epgReloadTimer);
   epgReloadTimer = setTimeout(function () { epgReload(false); }, 400);
 }
+/**
+ * Loads native EPG data from the selected file, falling back to the playlist header URL on failure.
+ * A truthy force is passed to the native loader; overlapping requests queue a follow-up, prioritizing force.
+ * Load errors update EPG status rather than rejecting; disabled or missing sources clear cached entries.
+ */
 async function epgReload(force) {
   var n = native();
   if (!n) { renderEpgInfo(); return; }
@@ -896,6 +997,7 @@ async function epgReload(force) {
   epgRefresh();
   if (epg.pending) { var f = epg.pending === 'force'; epg.pending = ''; epgReload(f); }
 }
+/** Saves and enables the selected EPG filename, closes the library, and starts a forced reload. */
 function setEpgFile(name) {
   epg.file = name;
   lsSet(LS_EPGFILE, name);
@@ -906,10 +1008,15 @@ function setEpgFile(name) {
   epgReload(true);
 }
 
+/** Debounces the visible-channel EPG lookup by 250 ms. */
 function scheduleEpgRefresh() {
   clearTimeout(epgTimer);
   epgTimer = setTimeout(epgRefresh, 250);
 }
+/**
+ * Updates cached now/next programs for rendered channels and the current channel, then repaints EPG UI.
+ * A native lookup failure stops further lookups and leaves already cached results available.
+ */
 async function epgRefresh() {
   var n = native();
   if (!n || !epg.enabled || epg.status !== 'ok') { epgPaintAll(); return; }
@@ -930,10 +1037,12 @@ async function epgRefresh() {
   }
   epgPaintAll();
 }
+/** Returns elapsed program progress as a percentage clamped to 0–100 for positive-duration s/e Unix timestamps in milliseconds. */
 function progress(p) {
   var v = (Date.now() - p.s) / (p.e - p.s);
   return Math.max(0, Math.min(1, v)) * 100;
 }
+/** Paints cached current or next program data on a channel card, hiding it when EPG or program data is unavailable. */
 function epgPaintCard(el) {
   var box = el._epg;
   if (!box) return;
@@ -950,6 +1059,7 @@ function epgPaintCard(el) {
     box.root.style.display = 'none';
   }
 }
+/** Paints cached now/next text and progress for ch, hiding the block when neither program is available. */
 function epgPaintBlock(blockEl, nowEl, nextEl, barEl, ch) {
   var d = (epg.enabled && ch) ? epg.cache.get(ch) : null;
   if (!d || (!d.n && !d.x)) { blockEl.style.display = 'none'; return; }
@@ -976,6 +1086,7 @@ function closeGuide() { guide.classList.remove('open'); }
 var favList = [], favIdx = 0;
 function favOpen() { return favsPanel.classList.contains('open'); }
 function closeFavs() { favsPanel.classList.remove('open'); }
+/** Rebuilds the favorites panel from all channels, wrapping an out-of-range selection and scrolling it into view. */
 function renderFavs() {
   favsList.textContent = '';
   favList = state.channels.filter(isFav);
@@ -995,6 +1106,7 @@ function renderFavs() {
   var act = favsList.querySelector('.frow.focused');
   if (act) { try { act.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
 }
+/** Opens favorites with the current channel selected when present; no-ops if no channel is current. */
 function openFavs() {
   if (!state.current) return;
   favList = state.channels.filter(isFav);
@@ -1004,11 +1116,13 @@ function openFavs() {
   favsPanel.classList.add('open');
   showOsd();
 }
+/** Moves the favorite selection by delta positions with wraparound; does nothing for an empty list. */
 function moveFav(delta) {
   if (!favList.length) return;
   favIdx = (favIdx + delta + favList.length) % favList.length;
   renderFavs();
 }
+/** Plays the selected favorite if present, then closes the favorites panel. */
 function pickFav() {
   var c = favList[favIdx];
   if (c) playChannel(c);
@@ -1017,6 +1131,7 @@ function pickFav() {
 
 var GUIDE_LIMIT = 500;
 var guideProgs = [], guideIdx = 0;
+/** Formats a Unix timestamp in milliseconds as a Russian local date, adding a relative label within two days of today. */
 function guideDayLabel(ms) {
   var d = new Date(ms), now = new Date();
   var d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -1027,6 +1142,7 @@ function guideDayLabel(ms) {
   var dm = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   return (rel ? rel + ' · ' : '') + wd + ', ' + dm;
 }
+/** Stores and renders the supplied program order with local day headings, archive hints, and current/first-future descriptions. */
 function renderGuide(programs) {
   guideProgs = programs.slice();
   guideList.textContent = '';
@@ -1052,6 +1168,7 @@ function guideScrollToIdx() {
   var row = rows[guideIdx];
   if (row) { try { row.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
 }
+/** Moves the program selection by delta positions with wraparound and scrolls it into view. */
 function guideMove(delta) {
   if (!guideProgs.length) return;
   guideIdx = (guideIdx + delta + guideProgs.length) % guideProgs.length;
@@ -1059,6 +1176,11 @@ function guideMove(delta) {
   for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('focused', i === guideIdx);
   guideScrollToIdx();
 }
+/**
+ * Builds an archive URL from channel or playlist header templates, returning null if neither supplies one.
+ * Program s/e values are Unix milliseconds; time placeholders use Unix seconds and duration uses
+ * rounded minutes with a minimum of one. Unknown placeholders remain unchanged; append mode extends ch.url.
+ */
 function catchupUrl(ch, p) {
   var tmpl = (ch && ch.catchupSource) || headerCatchup.source || '';
   if (!tmpl) return null;
@@ -1081,6 +1203,7 @@ function catchupUrl(ch, p) {
   }
   return u;
 }
+/** Plays the selected past program via its archive template, resumes live for the current program, or shows why it cannot play. */
 function guidePick() {
   var p = guideProgs[guideIdx], ch = state.current;
   if (!p || !ch) return;
@@ -1095,6 +1218,7 @@ function guidePick() {
     showToast('Передача ещё не началась');
   }
 }
+/** Requests up to 500 native EPG programs for the current channel and opens the guide at current or next; request errors produce a toast. */
 async function openGuide() {
   var ch = state.current, n = native();
   if (!ch) return;
@@ -1114,15 +1238,18 @@ async function openGuide() {
 }
 
 /* ================= Воспроизведение ================= */
+/** Shows a video overlay message; a truthy isError also marks the current playback attempt as failed. */
 function showVideoMsg(text, isError) {
   videoMsg.textContent = text;
   videoMsg.className = 'show' + (isError ? ' error' : '');
   if (isError) playFailed = true;
 }
 function hideVideoMsg() { videoMsg.className = ''; }
+/** Attempts browser video playback, ignoring synchronous errors and rejected play promises, including autoplay denial. */
 function safePlay() {
   try { var p = video.play(); if (p && p.catch) p.catch(function () { /* автозапуск запрещён — ждём действия */ }); } catch (e) { /* ignore */ }
 }
+/** Invalidates pending playback attempts, clears browser media and HLS state, and requests native playback stop. */
 function stopPlayback() {
   playToken++;
   gating = false;
@@ -1137,7 +1264,10 @@ function stopPlayback() {
 }
 function hlsAvailable() { return !!(window.Hls && window.Hls.isSupported()); }
 
-// Сколько секунд видео уже загружено впереди текущей позиции
+/**
+ * Returns buffered seconds ahead of the playhead from the first range ending no earlier than 0.1 seconds behind it.
+ * Returns zero if no such range is found or buffered-range access fails.
+ */
 function bufferedAhead() {
   try {
     var b = video.buffered, ct = video.currentTime;
@@ -1147,7 +1277,10 @@ function bufferedAhead() {
   } catch (e) { /* ignore */ }
   return 0;
 }
-// Запуск воспроизведения только после накопления буфера (мс); страховка по времени, чтобы не зависнуть
+/**
+ * Waits for ms milliseconds of buffered video, or until more than ms + 8,000 ms have elapsed, before attempting play.
+ * A stale playback token or user pause cancels polling; a zero duration attempts playback immediately.
+ */
 function gatePlay(token, ms) {
   if (!ms) { gating = false; safePlay(); return; }
   gating = true;
@@ -1160,6 +1293,10 @@ function gatePlay(token, ms) {
   })();
 }
 
+/**
+ * Starts browser media playback with the configured buffer delay for this playback token.
+ * On a media error, tries HLS.js once if allowHlsFallback is truthy and supported; otherwise displays an error.
+ */
 function startNative(url, token, allowHlsFallback) {
   var handler = function () {
     if (token !== playToken) return;
@@ -1173,6 +1310,11 @@ function startNative(url, token, allowHlsFallback) {
   video.src = url;
   gatePlay(token, settings.bufferMs);
 }
+/**
+ * Starts HLS.js playback for this token, retrying fatal network and media errors up to twice each.
+ * Unrecovered fatal errors fall back to browser media when allowNativeFallback is truthy, or display an error.
+ * Synchronous HLS setup errors propagate to the caller.
+ */
 function startHls(url, token, allowNativeFallback) {
   var H = window.Hls, ms = settings.bufferMs;
   var cfg = { enableWorker: true, lowLatencyMode: false, backBufferLength: 30,
@@ -1205,6 +1347,7 @@ function startHls(url, token, allowNativeFallback) {
   h.loadSource(url);
   h.attachMedia(video);
 }
+/** Starts a stream through the native player if available, otherwise chooses HLS.js or browser media with a fallback on media errors. Synchronous setup errors propagate. */
 function playUrl(url) {
   if (playerPlugin()) { playNativePlayer(url); return; }
   stopPlayback();
@@ -1216,6 +1359,7 @@ function playUrl(url) {
   else startNative(url, token, hlsAvailable());
 }
 var nativeListenerReady = false;
+/** Registers the native player state listener once to update buffering, playing, and error UI. */
 function ensureNativeListener(np) {
   if (nativeListenerReady || !np) return;
   nativeListenerReady = true;
@@ -1226,7 +1370,7 @@ function ensureNativeListener(np) {
     else if (ev.state === 'error') showVideoMsg('Ошибка потока' + (ev.message ? ' (' + ev.message + ')' : ''), true);
   });
 }
-// Прямоугольник нативного видео в физических пикселях (getBoundingClientRect * devicePixelRatio)
+/** Sends video-box bounds in physical pixels to the native player when a channel is selected; rejected updates are ignored. */
 function syncPlayerBounds() {
   var np = playerPlugin();
   if (!np || !state.current) return;
@@ -1237,6 +1381,7 @@ function syncPlayerBounds() {
     w: Math.round(r.width * dpr), h: Math.round(r.height * dpr)
   }).catch(function () { /* ignore */ });
 }
+/** Starts a native stream with the configured buffer and bounds; rejected play requests show an error if a channel is still selected. */
 function playNativePlayer(url) {
   var np = playerPlugin();
   stopPlayback();
@@ -1249,6 +1394,7 @@ function playNativePlayer(url) {
     if (state.current) showVideoMsg('Не удалось воспроизвести поток (' + errMsg(e) + ')', true);
   });
 }
+/** Selects a channel, saves its URL, clears user pause, refreshes channel/EPG UI, and starts its stream. Synchronous playback setup errors propagate. */
 function playChannel(ch) {
   state.current = ch;
   userPaused = false;
@@ -1271,6 +1417,7 @@ function togglePause() {
   updateOsdState();
   if (state.mode === 'player') showOsd();
 }
+/** Plays the channel delta positions away in the filtered view with wraparound; if the current channel is absent, selects an end by direction. */
 function zap(delta) {
   var len = state.view.length;
   if (!len) return;
@@ -1297,6 +1444,7 @@ function updateOsdState() {
   if (playerPlugin()) { osdState.textContent = userPaused ? 'Пауза' : ''; return; }
   osdState.textContent = userPaused ? '\u23F8 Пауза' : '';
 }
+/** Shows current channel and EPG details and schedules hiding after 4.5 seconds; no-ops without a current channel. */
 function showOsd() {
   if (!state.current) return;
   var idx = state.view.indexOf(state.current);
@@ -1309,6 +1457,7 @@ function showOsd() {
   clearTimeout(osdTimer);
   osdTimer = setTimeout(function () { hideOsd(false); }, 4500);
 }
+/** Hides playback controls unless paused or a guide/favorites panel is open; a truthy force overrides those conditions. */
 function hideOsd(force) {
   if ((userPaused || guideOpen() || favOpen()) && !force) return;      // на паузе или с открытой программой панель остаётся
   clearTimeout(osdTimer);
@@ -1317,6 +1466,7 @@ function hideOsd(force) {
 function toggleControls() {
   if (osd.classList.contains('show')) hideOsd(true); else showOsd();
 }
+/** Enters the full-screen player layout for the current channel and schedules native bounds synchronization. */
 function enterPlayer() {
   if (state.mode === 'player' || !state.current) return;
   state.mode = 'player';
@@ -1324,6 +1474,7 @@ function enterPlayer() {
   showOsd();
   requestAnimationFrame(syncPlayerBounds);
 }
+/** Returns from player mode to the channel menu, closes player panels, and restores navigation focus while playback continues. */
 function showMenu() {
   if (state.mode !== 'player') return;
   state.mode = 'menu';
@@ -1342,6 +1493,7 @@ function exitApp() {
   var app = appPlugin();
   if (app && app.exitApp) app.exitApp(); else { try { window.close(); } catch (e) { /* ignore */ } }
 }
+/** Handles Back at most once per 250 ms, closing overlays or player mode first; in the menu, two presses within two seconds request exit. */
 function handleBack() {
   var t = Date.now();
   if (t - lastBackHandled < 250) return;   // одно нажатие не должно обработаться дважды
@@ -1384,17 +1536,20 @@ function syncSettingsUi() {
   renderServerUi();
   syncAutoStartUi();
 }
+/** Reads native autostart state when supported; disables the control if unavailable and ignores read failures. */
 function syncAutoStartUi() {
   var n = native();
   if (!n || !n.getAutoStart) { autoStartChk.disabled = true; autoStartChk.checked = false; return; }
   autoStartChk.disabled = false;
   n.getAutoStart().then(function (r) { autoStartChk.checked = !!(r && r.on); }).catch(function () { /* ignore */ });
 }
+/** Parses and saves a buffer duration in milliseconds, clamped to 0–7,000; invalid input retains the current value. */
 function setBuffer(v) {
   settings.bufferMs = toInt(v, settings.bufferMs, 0, 7000);
   lsSet(LS_BUF, String(settings.bufferMs));
   syncSettingsUi();
 }
+/** Opens settings and focuses the buffer control, recording its value so closing can apply a changed buffer to playback. */
 async function openSettings() {
   if (libraryOpen()) closeLibrary();
   bufAtOpen = settings.bufferMs;
@@ -1403,6 +1558,7 @@ async function openSettings() {
   setFocus(bufRange, false);
   refreshServerStatus();
 }
+/** Closes settings, restores button focus, and restarts the current channel if the buffer changed while open. */
 function closeSettings() {
   if (!settingsOpen()) return;
   settingsEl.classList.remove('open');
@@ -1523,10 +1679,12 @@ grid.addEventListener('click', function (e) {
 });
 
 /* ================= D-Pad навигация ================= */
+/** Returns visible navigation targets within the first open overlay, or the whole document if none is open. */
 function navItems() {
   var root = document.querySelector('.overlay.open') || document;
   return Array.prototype.slice.call(root.querySelectorAll('[data-nav]')).filter(function (el) { return el.getClientRects().length > 0; });
 }
+/** Moves the navigation highlight and blurs another text input; scrolls the target into view unless scroll is false. */
 function setFocus(el, scroll) {
   if (!el) return;
   if (focusedEl && focusedEl !== el) focusedEl.classList.remove('focused');
@@ -1539,6 +1697,7 @@ function setFocus(el, scroll) {
     catch (e) { el.scrollIntoView(); }
   }
 }
+/** Moves the highlight left/right/up/down among visible targets, preferring candidates in the same row or column. */
 function moveFocus(dir) {
   var items = navItems();
   if (!items.length) return;
@@ -1572,6 +1731,7 @@ function moveFocus(dir) {
   var pick = bestSame || best;
   if (pick) setFocus(pick);
 }
+/** Activates a navigation target, using its custom action, input interaction, group selection, or channel playback behavior. */
 function activate(el) {
   if (!el) return;
   if (el._act) { el._act(); return; }
@@ -1590,6 +1750,7 @@ function activate(el) {
     if (state.current === el._channel && !playFailed) enterPlayer(); else playChannel(el._channel);
   }
 }
+/** Normalizes supported keyboard and TV remote keys to navigation actions, returning null for unrecognized keys. */
 function keyName(e) {
   switch (e.key) {
     case 'ArrowUp': return 'up';
@@ -1609,6 +1770,7 @@ function keyName(e) {
   }
   return null;
 }
+/** Routes keyboard and TV remote actions by player, panel, or text-editing state, preventing defaults for handled navigation. */
 function onKeyDown(e) {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
 
@@ -1684,7 +1846,7 @@ window.addEventListener('resize', function () { requestAnimationFrame(syncPlayer
 
 /* ===== Управление плеером с пульта: короткое OK — пауза, удержание OK — в избранное ===== */
 var okHoldTimer = null;
-// Короткое OK — пауза (на отпускании), удержание ~0.7с — текущий канал в избранное
+/** Starts a 700 ms OK hold timer to toggle the current favorite; releasing earlier is handled as pause by onKeyUp. */
 function startOkHold() {
   clearTimeout(okHoldTimer);
   okHoldTimer = setTimeout(function () {
@@ -1692,13 +1854,14 @@ function startOkHold() {
     if (state.current) { toggleFav(state.current); showOsd(); }
   }, 700);
 }
+/** On OK release in player mode, cancels an unexpired hold timer and toggles pause; a completed hold does not pause. */
 function onKeyUp(e) {
   if (state.mode !== 'player') return;
   if (keyName(e) !== 'enter') return;
   if (okHoldTimer) { clearTimeout(okHoldTimer); okHoldTimer = null; togglePause(); }
 }
 window.addEventListener('keyup', onKeyUp, true);
-// После системных диалогов (выбор файла и т.п.) WebView может потерять фокус — возвращаем подсветку навигации.
+/** Restores the menu navigation highlight after focus changes, leaving active text/file inputs and player mode alone. */
 function restoreNavFocus() {
   if (state.mode === 'player') return;
   var ae = document.activeElement;
@@ -1758,6 +1921,10 @@ setInterval(function () { autoTick(); if (!document.hidden) epgRefresh(); }, 600
 document.addEventListener('visibilitychange', function () { if (!document.hidden) { autoTick(); epgRefresh(); setTimeout(restoreNavFocus, 60); } });
 
 /* ================= Пульт Remote Supremacy (мост из нативного сервера) ================= */
+/**
+ * Returns a remote-control snapshot with at most the first 800 filtered channels and their zero-based view indices.
+ * Counts describe the full lists; playing indicates a selected channel, not confirmed media playback.
+ */
 function remoteState() {
   var chans = state.view.slice(0, 800).map(function (c, i) {
     return { i: i, name: c.name, group: c.group, url: c.url, playing: c === state.current, fav: favs.has(c.url) };
@@ -1780,6 +1947,7 @@ function remoteState() {
     channels: chans
   };
 }
+/** Serializes all current channels, including hidden ones, as M3U with the header EPG URL and selected channel metadata; catch-up attributes are omitted. */
 function buildM3uText() {
   var headAttrs = [];
   if (headerEpgUrl) headAttrs.push('url-tvg="' + headerEpgUrl + '"');
@@ -1803,6 +1971,7 @@ function buildM3uText() {
   });
   return out.join('\n') + '\n';
 }
+/** Renames the first channel matching cmd.url and refreshes the view; returns remote state or an error result if absent. */
 function remoteRename(cmd) {
   var c = state.channels.filter(function (x) { return x.url === cmd.url; })[0];
   if (!c) return { ok: false, error: 'канал не найден' };
@@ -1811,6 +1980,7 @@ function remoteRename(cmd) {
   computeView(); renderGroups(); renderGrid(true);
   return remoteState();
 }
+/** Removes all channels matching cmd.url and clears a matching current selection; returns refreshed remote state or a not-found error result. */
 function remoteDelChannel(cmd) {
   var before = state.channels.length;
   state.channels = state.channels.filter(function (x) { return x.url !== cmd.url; });
@@ -1819,6 +1989,7 @@ function remoteDelChannel(cmd) {
   buildGroups(); computeView(); renderGroups(); renderGrid(false);
   return remoteState();
 }
+/** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
 function remoteDelGroup(cmd) {
   var key = (cmd.key === GROUP_NONE || cmd.key == null) ? '' : String(cmd.key);
   var before = state.channels.length;
@@ -1828,10 +1999,15 @@ function remoteDelGroup(cmd) {
   return remoteState();
 }
 var remoteNote = '';
+/** Saves an M3U edit snapshot for the open entry, silently ignoring persistence errors; no-ops without an entry. */
 function persistChannels() {
   if (!state.entry) return;
   try { lsSet('iptv.edit.' + state.entry.id, buildM3uText()); } catch (e) { /* ignore */ }
 }
+/**
+ * Moves channels from cmd.sources (an array or pipe-separated string of group names) into cmd.target.
+ * GROUP_NONE as target means ungrouped. Persists edits and returns refreshed remote state with a moved count.
+ */
 function remoteMergeGroups(cmd) {
   var target = String(cmd.target || '');
   var sources = cmd.sources;
@@ -1849,6 +2025,7 @@ function remoteMergeGroups(cmd) {
   persistChannels();
   var s = remoteState(); s.moved = moved; return s;
 }
+/** Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0"; refreshes visibility and returns remote state. */
 function remoteBlockGroup(cmd) {
   var key = String(cmd.key || '');
   var off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
@@ -1866,6 +2043,12 @@ function remoteBlockGroup(cmd) {
   return remoteState();
 }
 window.RemoteAPI = {
+  /**
+   * Dispatches a native server command, defaulting to state; channel indices refer to the filtered view.
+   * Returns state, command data, or an acknowledgment. Unknown commands and synchronous exceptions become
+   * { ok: false, error } results. Asynchronous loads, saves, and resets may still be pending after acknowledgment;
+   * lastNote reports later save/reset messages.
+   */
   handle: function (cmd) {
     try {
       cmd = cmd || {};

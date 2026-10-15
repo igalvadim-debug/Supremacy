@@ -9,8 +9,10 @@ function fileAt(id, i) { var e = $(id); return (e instanceof HTMLInputElement &&
 function api(q) {
   return fetch('/api/remote?' + q, { cache: 'no-store' }).then(function (r) { return r.json(); });
 }
+/** Encodes a group key for a query parameter, preserving the empty key for all channels. */
 function groupKey(k) { return k === '' ? '' : encodeURIComponent(k); }
 var lastTapUrl = '', lastTapAt = 0;
+/** Renders the player snapshot and channel/group actions, or displays a connection error for a missing or unsuccessful response. */
 function render(s) {
   if (!s || !s.ok) { $('err').textContent = 'Нет связи с плеером'; return; }
   $('err').textContent = '';
@@ -79,6 +81,7 @@ function render(s) {
   });
 }
 function el(tag, cls, text) { var e = document.createElement(tag); e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+/** Requests and renders the current player snapshot, displaying a connection error if the request or rendering fails. */
 function poll() { api('cmd=state').then(render).catch(function () { $('err').textContent = 'Нет связи с плеером'; }); }
 $('prev').onclick = function () { api('cmd=prev').then(render); };
 $('next').onclick = function () { api('cmd=next').then(render); };
@@ -108,6 +111,7 @@ $('pldl').onclick = function () {
     $('plmsg').textContent = 'Скачано: ' + (s.count || 0) + ' каналов';
   });
 };
+/** Fetches the latest asynchronous save/reset message after 1.8 seconds; request rejections are not caught. */
 function showNoteLater() { setTimeout(function () { api('cmd=lastNote').then(function (s) { if (s && s.note) $('plmsg').textContent = s.note; }); }, 1800); }
 $('plsave').onclick = function () {
   $('plmsg').textContent = 'Сохраняю…';

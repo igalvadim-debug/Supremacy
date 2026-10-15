@@ -21,11 +21,13 @@ function listMessage(text, isErr) {
   msg.className = 'empty' + (isErr ? ' err' : '');
 }
 
+/** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
 function fmtSize(n) {
   if (n < 1024) return n + ' Б';
   if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
   return (n / 1048576).toFixed(1) + ' МБ';
 }
+/** Formats a Unix timestamp in milliseconds as a Russian local date/time, returning an empty string for a falsy timestamp. */
 function fmtDate(ms) { return ms ? new Date(ms).toLocaleString('ru-RU') : ''; }
 function el(tag, cls, text) {
   var e = document.createElement(tag);
@@ -34,6 +36,7 @@ function el(tag, cls, text) {
   return e;
 }
 
+/** Fetches and renders native files with download/delete actions; request, JSON, or rendering errors become a connection message. */
 function refresh() {
   fetch('/api/files', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (data) {
     list.textContent = '';
@@ -69,6 +72,11 @@ function refresh() {
   });
 }
 
+/**
+ * Starts the next queued upload unless one is active or the queue is empty.
+ * Accepts .m3u, .m3u8, .xml, and .xml.gz names, case-insensitively. Rejected filenames, HTTP/API failures,
+ * and network errors update the upload row and advance the queue; success requires HTTP 200 and a truthy ok.
+ */
 function next() {
   if (busy || !queue.length) return;
   busy = true;
@@ -109,6 +117,7 @@ function next() {
   xhr.ontimeout = function () { done(false, 'Таймаут загрузки'); };
   xhr.send(file);
 }
+/** Appends selected files to the upload queue and starts processing if idle. */
 function add(files) {
   for (var i = 0; i < files.length; i++) queue.push(files[i]);
   next();
