@@ -42,6 +42,12 @@
     font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
   button.icon { padding: 0 .9rem; min-width: 2.7rem; font-size: 1.3rem; }
   button.plain { padding: 0 1rem; }
+  /* Цвет кнопок по смыслу: зелёный — обновить/очистить, фиолетовый — разделы и сервисы, красный — сброс, серо-синий — закрыть. Синий градиент — главное действие. */
+  button.btn-green  { background: linear-gradient(135deg, #22c58b, #0b8f60); }
+  button.btn-purple { background: linear-gradient(135deg, #a78bfa, #6d3fe0); }
+  button.btn-red    { background: linear-gradient(135deg, #f0616d, #b3263e); }
+  button.btn-slate  { background: linear-gradient(135deg, #3d4e78, #26324f); color: #dbe5fa; }
+  button:disabled   { opacity: .5; cursor: default; }
   #count { color: var(--muted); white-space: nowrap; min-width: 6rem; text-align: right; }
   #status { min-height: 1.4rem; font-size: .95rem; color: var(--muted); padding: 0 .1rem .2rem; }
   #status.ok { color: var(--ok); } #status.error { color: var(--err); } #status.warn { color: var(--warn); }
@@ -245,9 +251,9 @@
              spellcheck="false" placeholder="Ссылка на плейлист M3U / M3U8 (http://…)">
       <div class="btns">
         <button id="loadBtn" data-nav type="button">Загрузить</button>
-        <button id="libBtn" class="plain" data-nav type="button">Плейлисты</button>
-        <button id="reloadBtn" class="icon" data-nav type="button" title="Обновить плейлист" aria-label="Обновить плейлист">&#8635;</button>
-        <button id="settingsBtn" class="icon" data-nav type="button" title="Настройки" aria-label="Настройки">&#9881;</button>
+        <button id="libBtn" class="plain btn-purple" data-nav type="button">Плейлисты</button>
+        <button id="reloadBtn" class="icon btn-green" data-nav type="button" title="Обновить плейлист" aria-label="Обновить плейлист">&#8635;</button>
+        <button id="settingsBtn" class="icon btn-slate" data-nav type="button" title="Настройки" aria-label="Настройки">&#9881;</button>
       </div>
     </div>
     <div class="row r2">
@@ -312,14 +318,14 @@
 
     <div class="lbl">Файлы из «Загрузки / IPTV Player»</div>
     <div class="line">
-      <button id="srvBtn" data-nav type="button">Сервер: выкл</button>
+      <button id="srvBtn" class="btn-purple" data-nav type="button">Сервер: выкл</button>
       <span id="srvInfo" class="tip" style="margin-top:0"></span>
     </div>
     <div class="tip">Включите сервер и откройте адрес в браузере на компьютере или телефоне в той же сети Wi-Fi: можно загрузить .m3u, .m3u8, .xml и .xml.gz (телепрограмма).</div>
     <div id="qrBox" class="qr"></div>
     <div id="fileList" class="list"></div>
 
-    <div class="actions"><button id="libClose" data-nav type="button">Закрыть</button></div>
+    <div class="actions"><button id="libClose" class="btn-slate" data-nav type="button">Закрыть</button></div>
   </div>
 </div>
 
@@ -357,27 +363,33 @@
     </div>
     <div id="epgInfo" class="tip"></div>
     <div class="actions">
-      <button id="epgReloadBtn" data-nav type="button">Обновить EPG</button>
-      <button id="epgResetBtn" data-nav type="button">Сбросить файл EPG</button>
+      <button id="epgReloadBtn" class="btn-green" data-nav type="button">Обновить EPG</button>
+      <button id="epgResetBtn" class="btn-red" data-nav type="button">Сбросить файл EPG</button>
     </div>
 
     <div class="lbl">Скрытые группы (PIN)</div>
     <div class="line">
-      <button id="pinSetBtn" data-nav type="button">Задать / сменить PIN</button>
-      <button id="pinClearBtn" data-nav type="button">Снять PIN</button>
+      <button id="pinSetBtn" class="btn-purple" data-nav type="button">Задать / сменить PIN</button>
+      <button id="pinClearBtn" class="btn-red" data-nav type="button">Снять PIN</button>
     </div>
     <div class="tip">Замок рядом с группами — скрывает группы каналов под PIN из 3 цифр.</div>
 
     <div class="lbl">Файловый сервер</div>
     <div class="line">
-      <button id="srvChk" data-nav type="button">Включить сервер</button>
+      <button id="srvChk" class="btn-purple" data-nav type="button">Включить сервер</button>
       <span class="tip" style="margin-top:0">Загрузка файлов по Wi-Fi</span>
     </div>
     <div id="srvAddr" class="tip"></div>
 
+    <div class="lbl">Кэш</div>
+    <div class="line">
+      <button id="clearCacheBtn" class="btn-green" data-nav type="button">Очистить кэш</button>
+      <span class="tip" style="margin-top:0">Логотипы и временные файлы. Плейлисты, избранное и настройки не затрагиваются.</span>
+    </div>
+
     <div class="actions">
-      <button id="reloadNow" data-nav type="button">Обновить плейлист</button>
-      <button id="closeSettings" data-nav type="button">Закрыть</button>
+      <button id="reloadNow" class="btn-green" data-nav type="button">Обновить плейлист</button>
+      <button id="closeSettings" class="btn-slate" data-nav type="button">Закрыть</button>
     </div>
   </div>
 </div>
@@ -386,7 +398,7 @@
     <h2 id="pinTitle">Введите PIN</h2>
     <div id="pinDots"></div>
     <div id="pinGrid"></div>
-    <div class="actions"><button id="pinCancel" data-nav type="button">Отмена</button></div>
+    <div class="actions"><button id="pinCancel" class="btn-slate" data-nav type="button">Отмена</button></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -1820,6 +1832,14 @@
     lsSet(LS_EPGFILE, '');
     showToast('Файл EPG сброшен');
     epgReload(true);
+  });
+  $('clearCacheBtn').addEventListener('click', async function () {
+    var n = native();
+    if (!n || !n.clearCache) { showToast('Очистка кэша доступна только в приложении'); return; }
+    try {
+      var r = await n.clearCache();
+      showToast('Кэш очищен: освобождено ' + fmtSize((r && r.freed) || 0));
+    } catch (e) { showToast('Не удалось очистить кэш: ' + errMsg(e), 3500); }
   });
   srvChk.addEventListener('click', function () { setServer(!srv.running); });
   srvBtn.addEventListener('click', function () { setServer(!srv.running); });
