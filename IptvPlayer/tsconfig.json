@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    /* Современная сборка через Vite/esbuild */
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+
+    /* Strikte Typisierung: siehe MIGRATION.md. */
+    "strict": true,
+
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "noEmit": true,
+
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "vite.config.ts",
+    "capacitor.config.ts"
+  ]
+}
