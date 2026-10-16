@@ -26,7 +26,8 @@ export interface IptvPlayerPlugin {
   addListener(event: 'state', listener: (event: NativePlayerEvent) => void): Promise<PluginListenerHandle>;
   setBounds(options: { x: number; y: number; w: number; h: number }): Promise<void>;
   setVisible(options: { visible: boolean }): Promise<void>;
-  play(options: { url: string; bufferMs: number }): Promise<void>;
+  /** connectTimeoutMs/readTimeoutMs — увеличенные таймауты ExoPlayer; старые версии нативного плагина их игнорируют. */
+  play(options: { url: string; bufferMs: number; connectTimeoutMs?: number; readTimeoutMs?: number }): Promise<void>;
   stop(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;

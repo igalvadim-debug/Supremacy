@@ -38,25 +38,31 @@
   .qrcard b { display:block; margin-bottom:.5rem; }
   .qrcard .qr svg { width:9rem; height:9rem; background:#fff; border-radius:.5rem; padding:.3rem; }
   .qrcard .url { margin-top:.4rem; color: var(--muted); font-size:.8rem; word-break:break-all; }
+
+  .langbar { display:flex; gap:.4rem; margin:.1rem 0 .3rem; }
+  .flagbtn { display:flex; align-items:center; gap:.35rem; height:2rem; min-width:0; padding:0 .6rem; border:0; border-radius:.5rem; color:#fff; font-size:.85rem; font-weight:700; cursor:pointer; background:#243254; }
+  .flagbtn .flag svg { display:block; width:1.6rem; height:1.1rem; border-radius:.15rem; }
+  .flagbtn.on { box-shadow:0 0 0 .15rem var(--accent); }
 </style>
-  <script type="module" crossorigin src="/assets/server-page-e5n6wgDd.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/dom-DkBhh39r.js">
+  <script type="module" crossorigin src="/assets/server-page-Cik25Mnw.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/i18n-BwkY2Rx9.js">
 </head>
 <body>
 <main>
-  <h1>IPTV <span>Player</span>: файлы</h1>
-  <p class="sub">Плейлисты <b>.m3u</b>, <b>.m3u8</b> и телепрограмма <b>.xml</b>, <b>.xml.gz</b>. Файлы сохраняются в папку «Загрузки / IPTV Player» на устройстве.</p>
+  <div class="langbar" id="langBtns"></div>
+  <h1>IPTV <span>Player</span><span data-i18n>: файлы</span></h1>
+  <p class="sub" data-i18n>Плейлисты .m3u, .m3u8 и телепрограмма .xml, .xml.gz. Файлы сохраняются в папку «Загрузки / IPTV Player» на устройстве.</p>
 
   <div id="qrs">
-    <div class="qrcard"><b>Загрузка файлов</b><div id="qrUpload" class="qr"></div><div class="url">Наведите камеру телефона: откроется эта страница</div></div>
-    <div class="qrcard"><b>Пульт</b><div id="qrRemote" class="qr"></div><div class="url">Наведите камеру телефона: откроется пульт</div></div>
+    <div class="qrcard"><b data-i18n>Загрузка файлов</b><div id="qrUpload" class="qr"></div><div class="url" data-i18n>Наведите камеру телефона: откроется эта страница</div></div>
+    <div class="qrcard"><b data-i18n>Пульт</b><div id="qrRemote" class="qr"></div><div class="url" data-i18n>Наведите камеру телефона: откроется пульт</div></div>
   </div>
 
-  <div id="drop">Перетащите файлы сюда или <label for="pick">выберите на компьютере</label><input id="pick" type="file" multiple accept=".m3u,.m3u8,.xml,.gz"></div>
+  <div id="drop"><span data-i18n>Перетащите файлы сюда или</span> <label for="pick" data-i18n>выберите на компьютере</label><input id="pick" type="file" multiple accept=".m3u,.m3u8,.xml,.gz"></div>
   <div id="uploads" style="margin-top:1rem"></div>
 
-  <h2>Файлы на устройстве</h2>
-  <div id="list"><div class="empty">Загрузка…</div></div>
+  <h2 data-i18n>Файлы на устройстве</h2>
+  <div id="list"><div class="empty" data-i18n>Загрузка…</div></div>
 </main>
 </body>
 </html>
