@@ -23,7 +23,7 @@ function render(s: RemoteResponse | null): void {
     $('now').appendChild(sm);
   }
   const g = $('groups'); g.textContent = '';
-  const all = el('button', 'chip' + (s.group === '' ? ' a' : ''), tr('Все ({0})', s.count));
+  const all = el('button', 'chip' + (s.group === '' ? ' a' : ''), tr('Все ({0})', s.count || 0));
   all.type = 'button';
   all.onclick = function (): void { api('cmd=group&key=').then(render); };
   g.appendChild(all);

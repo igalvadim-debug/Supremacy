@@ -151,6 +151,8 @@ let pinUnlocked: boolean = false;
 /* ================= Состояние ================= */
 const state: PlayerState = { channels: [], view: [], groups: [], group: lsGet(LS_GROUP), current: null, entry: null, mode: 'menu', renderCount: PAGE_SIZE };
 const cardMap = new Map<Channel, NavElement>();
+// Индекс канала в state.view — O(1) вместо линейного поиска (indexOf) на каждое переключение канала/OSD.
+const viewIndex = new Map<Channel, number>();
 let focusedEl: NavElement | null = null, osdTimer: number | undefined = undefined, searchTimer: number | undefined = undefined, epgTimer: number | undefined = undefined, epgReloadTimer: number | undefined = undefined, libTimer: number | undefined = undefined;
 let hls: Hls | null = null, playToken: number = 0, nativeErrHandler: (() => void) | null = null, playFailed: boolean = false, userPaused: boolean = false, loading: boolean = false;
 let gating: boolean = false, hasPlayed: boolean = false, swipedAt: number = 0, lpFired: boolean = false, lastAutoTry: number = 0, filesSig: string = '';
@@ -331,6 +333,18 @@ async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
   const url = urlInput.value.trim();
   if (!url) { setStatus(tr('Введите ссылку на плейлист.'), 'error'); return; }
   if (!/^https?:\/\//i.test(url)) { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
+  // Нет сети — не пытаемся грузить, сразу понятное сообщение + сохранённая копия, если есть.
+  if (navigator.onLine === false) {
+    if (cached && cached.text) {
+      try {
+        applyPlaylist(cached.text, tr('сохранённая копия'), { kind: 'url', key: url }, { nosave: true });
+        setStatus(tr('Нет связи ({0}). Открыта сохранённая копия плейлиста.', tr('устройство не в сети')), 'warn');
+      } catch (e2) { setStatus(tr('Не удалось загрузить плейлист: {0}', tr('устройство не в сети')), 'error'); }
+    } else {
+      setStatus(tr('Нет соединения с интернетом. Проверьте сеть и повторите попытку.'), 'error');
+    }
+    return;
+  }
   lsSet(LS_URL, url);
   loading = true;
   setStatus(tr('Загрузка плейлиста…'));
@@ -733,6 +747,8 @@ function computeView(): void {
   else if (g) out = out.filter(function (c: Channel): boolean { return gkey(c) === g; });
   if (q) out = out.filter(function (c: Channel): boolean { return c.nameLower.indexOf(q) !== -1 || c.groupLower.indexOf(q) !== -1; });
   state.view = out;
+  viewIndex.clear();
+  for (let i = 0; i < out.length; i++) viewIndex.set(out[i], i);
 }
 function makeChip(key: string, label: string, count: number): NavElement {
   const el = mk('div', 'chip' + (state.group === key ? ' active' : ''));
@@ -916,18 +932,33 @@ function createMoreCard(rest: number): NavElement {
   const el = mk('div', 'card more', tr('Показать ещё\n(осталось {0})', rest));
   el.setAttribute('data-nav', '1');
   el.style.whiteSpace = 'pre-line';
+  el._more = true;
   return el;
 }
 /** Rebuilds the paginated channel grid and schedules an EPG refresh; a truthy keepScroll restores the prior scroll offset. */
 function renderGrid(keepScroll: boolean): void {
   const st = gridPane.scrollTop;
-  grid.textContent = '';
-  cardMap.clear();
-  const frag = document.createDocumentFragment();
   const n = Math.min(state.view.length, state.renderCount);
-  for (let i = 0; i < n; i++) {
+  // Инкрементальная перерисовка: карточки уже отрендеренных каналов переиспользуются,
+  // DOM меняется только в изменившемся хвосте списка (поиск, «Показать ещё», EPG-обновления).
+  let common = 0;
+  if (grid.childElementCount === n + (state.view.length > n ? 1 : 0) && !(grid.firstElementChild as NavElement | null)?._more) {
+    while (common < n) {
+      const el = grid.children[common] as NavElement | undefined;
+      if (!el || el._channel !== state.view[common]) break;
+      common++;
+    }
+  }
+  if (common) {
+    // Удаляем устаревшие хвостовые узлы; cardMap очистим ниже и заполним заново.
+    while (grid.lastElementChild && grid.childElementCount > common) grid.removeChild(grid.lastElementChild);
+  } else {
+    grid.textContent = '';
+    cardMap.clear();
+  }
+  const frag = document.createDocumentFragment();
+  for (let i = common; i < n; i++) {
     const el = createCard(state.view[i]);
-    cardMap.set(state.view[i], el);
     frag.appendChild(el);
   }
   if (state.view.length > n) {
@@ -937,6 +968,7 @@ function renderGrid(keepScroll: boolean): void {
       : (state.group === GROUP_FAV && !searchInput.value.trim() ? tr('В избранном пусто. Нажмите ★ на канале, чтобы добавить.') : tr('Ничего не найдено'))));
   }
   grid.appendChild(frag);
+  for (let i = 0; i < n; i++) cardMap.set(state.view[i], grid.children[i] as NavElement);
   if (keepScroll) gridPane.scrollTop = st;
   const total = state.channels.length;
   countEl.textContent = total ? (state.view.length === total ? total + ' ' + plural(total) : tr('{0} из {1}', state.view.length, total)) : '';
@@ -1048,7 +1080,7 @@ async function epgRefresh(): Promise<void> {
   if (!n || !epg.enabled || epg.status !== 'ok') { epgPaintAll(); return; }
   const chans: Channel[] = [];
   cardMap.forEach(function (el: NavElement, ch: Channel): void { chans.push(ch); });
-  if (state.current && chans.indexOf(state.current) === -1) chans.push(state.current);
+  if (state.current && !epg.cache.has(state.current)) chans.push(state.current);
   for (let off = 0; off < chans.length; off += 300) {
     let part = chans.slice(off, off + 300), res: EpgLookupResponse;
     try {
@@ -1073,16 +1105,19 @@ function epgPaintCard(el: NavElement): void {
   const box = el._epg;
   if (!box) return;
   const d = epg.enabled ? (el._channel ? epg.cache.get(el._channel) : undefined) : null;
+  // Пропускаем перерисовку, если данные и ширина полосы не изменились (экономит layout на сотнях карточек).
+  const w = d && d.n ? progress(d.n) + '%' : '0';
   if (d && d.n) {
-    box.et.textContent = d.n.t;
-    box.fill.style.width = progress(d.n) + '%';
-    box.root.style.display = 'block';
+    if (box.et.textContent !== d.n.t) box.et.textContent = d.n.t;
+    if (box.fill.style.width !== w) box.fill.style.width = w;
+    if (box.root.style.display !== 'block') box.root.style.display = 'block';
   } else if (d && d.x) {
-    box.et.textContent = fmtTime(d.x.s) + ' ' + d.x.t;
-    box.fill.style.width = '0';
-    box.root.style.display = 'block';
+    const t = fmtTime(d.x.s) + ' ' + d.x.t;
+    if (box.et.textContent !== t) box.et.textContent = t;
+    if (box.fill.style.width !== '0') box.fill.style.width = '0';
+    if (box.root.style.display !== 'block') box.root.style.display = 'block';
   } else {
-    box.root.style.display = 'none';
+    if (box.root.style.display !== 'none') box.root.style.display = 'none';
   }
 }
 /** Paints cached now/next text and progress for ch, hiding the block when neither program is available. */
@@ -1271,8 +1306,10 @@ function showVideoMsg(text: string, isError: boolean): void {
   if (isError) playFailed = true;
 }
 function hideVideoMsg(): void { videoMsg.className = ''; }
-/* ---- Ошибки потока: крупно на языке интерфейса, ниже на двух других, код — мелко ---- */
+/* ---- Ошибки потока: крупно на языке интерфейса, ниже на двух других, технический код скрыт ---- */
 const RETRY_DELAYS_MS = [1000, 3000, 7000];
+/** Увеличенные таймауты ExoPlayer (мс): соединение / чтение. Передаются в нативный плеер. */
+const NET_CONNECT_TIMEOUT_MS = 20000, NET_READ_TIMEOUT_MS = 30000;
 let retryCount = 0;
 let retryTimer: number | undefined = undefined;
 /** Показывает ошибку потока на трёх языках; final=false — идёт автоповтор, к тексту добавляется обратный отсчёт. */
@@ -1287,27 +1324,36 @@ function showStreamError(kind: StreamErrKind, code: string, final: boolean, retr
     d.textContent = txt;
     videoMsg.appendChild(d);
   });
-  const c = document.createElement('div');
-  c.className = 'emc';
-  c.textContent = code;
-  videoMsg.appendChild(c);
+  // Технический код (ExoPlayer/hls.js) обычному пользователю не показываем;
+  // он остаётся только в консоли для диагностики.
+  if (code) console.log('[stream-error]', kind, code, final ? 'final' : 'retry');
   videoMsg.className = 'show error';
   if (final) playFailed = true;
 }
-/** Сопоставляет имя ошибки ExoPlayer (Media3) и HTTP-код с понятной причиной. */
+/** Сопоставляет имя/текст ошибки ExoPlayer (Media3) и HTTP-код с понятной причиной. */
 function nativeErrKind(code: string, status?: number): StreamErrKind {
-  if (code.indexOf('BAD_HTTP_STATUS') >= 0) {
+  const u = code.toUpperCase();
+  if (u.indexOf('BAD_HTTP_STATUS') >= 0 || /HTTP (4|5)\d\d/.test(u)) {
     if (status === 404 || status === 410) return 'notfound';
     if (status === 401 || status === 403 || status === 429) return 'denied';
+    if (status && status < 500) return 'server';
     return 'server';
   }
-  if (code.indexOf('FILE_NOT_FOUND') >= 0) return 'notfound';
-  if (code.indexOf('CLEARTEXT') >= 0) return 'cleartext';
-  if (code.indexOf('TIMEOUT') >= 0) return 'timeout';
-  if (code.indexOf('INVALID_HTTP_CONTENT_TYPE') >= 0 || code.indexOf('PARSING_') >= 0) return 'format';
-  if (code.indexOf('AUDIO_TRACK') >= 0) return 'audio';
-  if (code.indexOf('DECOD') >= 0) return 'decoder';
-  if (code.indexOf('ERROR_CODE_IO_') >= 0 || code.indexOf('REMOTE_ERROR') >= 0) return 'network';
+  if (u.indexOf('FILE_NOT_FOUND') >= 0) return 'notfound';
+  if (u.indexOf('CLEARTEXT') >= 0) return 'cleartext';
+  if (u.indexOf('TIMEOUT') >= 0 || u.indexOf('ETIMEDOUT') >= 0) return 'timeout';
+  if (u.indexOf('INVALID_HTTP_CONTENT_TYPE') >= 0 || u.indexOf('PARSING_') >= 0 || u.indexOf('UNEXPECTED_FEATURE') >= 0) return 'format';
+  if (u.indexOf('AUDIO_TRACK') >= 0) return 'audio';
+  if (u.indexOf('DECOD') >= 0 || u.indexOf('UNSUPPORTED_FORMAT') >= 0 || u.indexOf('CONFIGURATION_ERROR') >= 0) return 'decoder';
+  // Сетевые сбои: ERROR_CODE_IO_NETWORK_CONNECTION_FAILED / -CLOSED / SOCKET / UNKNOWN_HOST
+  // и тексты исключений Java (UnknownHost, Connection refused, Network is unreachable …).
+  if (u.indexOf('ERROR_CODE_IO_') >= 0 || u.indexOf('REMOTE_ERROR') >= 0 ||
+      u.indexOf('UNKNOWN_HOST') >= 0 || u.indexOf('CONNECTION_REFUSED') >= 0 ||
+      u.indexOf('NETWORK_IS_UNREACHABLE') >= 0 || u.indexOf('ENOTCONN') >= 0 ||
+      u.indexOf('ECONNREFUSED') >= 0 || u.indexOf('EHOSTUNREACH') >= 0 ||
+      u.indexOf('NO INTERNET') >= 0 || u.indexOf('SOCKET') >= 0 ||
+      u.indexOf('SSL') >= 0 || u.indexOf('CLOCK') >= 0) return 'network';
+  if (u.indexOf('BEHIND_LIVE_WINDOW') >= 0) return 'timeout';
   return 'generic';
 }
 /** Причина фатальной ошибки hls.js (браузерный запасной плеер). */
@@ -1321,21 +1367,34 @@ function hlsErrKind(data: ErrorData): StreamErrKind {
   if (String(data.type) === 'mediaError') return 'format';
   return 'generic';
 }
+/** Таймаут «поток молчит»: нет состояния playing/error от нативного плеера — считаем канал недоступен. */
+const STARTUP_TIMEOUT_MS = 45000;
+let startupTimer: number | undefined = undefined;
+/** Включает watchdog запуска: если за STARTUP_TIMEOUT_MS ничего не играет — автоповтор/ошибка как при сбое сети. */
+function armStartupWatchdog(): void {
+  window.clearTimeout(startupTimer);
+  startupTimer = window.setTimeout(function (): void {
+    if (state.current && !playFailed && !userPaused) handleNativeError({ state: 'error', message: 'STARTUP_TIMEOUT' });
+  }, STARTUP_TIMEOUT_MS);
+}
+function disarmStartupWatchdog(): void { window.clearTimeout(startupTimer); startupTimer = undefined; }
 /** Ошибка нативного плеера: при сетевых сбоях — автоповтор через 1, 3 и 7 секунд, затем понятное сообщение. */
 function handleNativeError(ev: NativePlayerEvent): void {
   const code = ev.message || 'ERROR';
-  const kind = nativeErrKind(code, ev.status);
+  const kind = code === 'STARTUP_TIMEOUT' ? 'timeout' : nativeErrKind(code, ev.status);
   const label = ev.status ? code + ' \u00B7 HTTP ' + ev.status : code;
   const cur = state.current;
   const retryable = kind === 'network' || kind === 'timeout' || kind === 'server' || kind === 'denied' || kind === 'generic';
   if (cur && retryable && retryCount < RETRY_DELAYS_MS.length) {
     const delay = RETRY_DELAYS_MS[retryCount];
     retryCount++;
+    disarmStartupWatchdog();
     showStreamError(kind, label, false, delay / 1000, retryCount, RETRY_DELAYS_MS.length);
     window.clearTimeout(retryTimer);
     retryTimer = window.setTimeout(function (): void { if (state.current === cur) retryNative(cur.url); }, delay);
     return;
   }
+  disarmStartupWatchdog();
   showStreamError(kind, label, true);
 }
 /** Повторный запуск того же потока в нативном плеере (без полной остановки). */
@@ -1343,7 +1402,8 @@ function retryNative(url: string): void {
   const np = playerPlugin();
   if (!np) return;
   playFailed = false;
-  np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e: unknown): void {
+  armStartupWatchdog();
+  np.play({ url: url, bufferMs: settings.bufferMs, connectTimeoutMs: NET_CONNECT_TIMEOUT_MS, readTimeoutMs: NET_READ_TIMEOUT_MS }).catch(function (e: unknown): void {
     if (state.current) showStreamError('generic', errMsg(e), true);
   });
 }
@@ -1360,7 +1420,7 @@ function stopPlayback(): void {
   playToken++;
   gating = false;
   hasPlayed = false;
-  retryCount = 0; window.clearTimeout(retryTimer);
+  retryCount = 0; window.clearTimeout(retryTimer); disarmStartupWatchdog();
   if (nativeErrHandler) { video.removeEventListener('error', nativeErrHandler); nativeErrHandler = null; }
   if (hls) { try { hls.destroy(); } catch (e) { /* ignore */ } hls = null; }
   try { video.pause(); } catch (e) { /* ignore */ }
@@ -1428,7 +1488,8 @@ function startHls(url: string, token: number, allowNativeFallback: boolean): voi
   const H = window.Hls!, ms = settings.bufferMs;
   const cfg: Partial<HlsConfig> = { enableWorker: true, lowLatencyMode: false, backBufferLength: 30,
     maxBufferLength: Math.max(30, Math.ceil(ms / 1000) + 15),
-    manifestLoadingMaxRetry: 2, levelLoadingMaxRetry: 2, fragLoadingMaxRetry: 3 };
+    manifestLoadingTimeOut: 20000, manifestLoadingMaxRetry: 2, levelLoadingTimeOut: 20000, levelLoadingMaxRetry: 2,
+    fragLoadingTimeOut: 30000, fragLoadingMaxRetry: 3 };
   // Для прямого эфира буфер = отступ от «живого» края
   if (ms > 0) cfg.liveSyncDuration = Math.max(1, ms / 1000); else cfg.liveSyncDurationCount = 1;
   const h = new H(cfg);
@@ -1475,7 +1536,7 @@ function ensureNativeListener(np: IptvPlayerPlugin | null): void {
   np.addListener('state', function (ev: NativePlayerEvent): void {
     if (!ev || !state.current) return;
     if (ev.state === 'buffering') showVideoMsg(tr('Буферизация…'), false);
-    else if (ev.state === 'playing') { hasPlayed = true; retryCount = 0; hideVideoMsg(); updateOsdState(); }
+    else if (ev.state === 'playing') { hasPlayed = true; retryCount = 0; disarmStartupWatchdog(); hideVideoMsg(); updateOsdState(); }
     else if (ev.state === 'error') handleNativeError(ev);
   });
 }
@@ -1500,7 +1561,8 @@ function playNativePlayer(url: string): void {
   ensureNativeListener(np);
   requestAnimationFrame(syncPlayerBounds);
   np.setVisible({ visible: true }).catch(function (): void { /* ignore */ });
-  np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e: unknown): void {
+  armStartupWatchdog();
+  np.play({ url: url, bufferMs: settings.bufferMs, connectTimeoutMs: NET_CONNECT_TIMEOUT_MS, readTimeoutMs: NET_READ_TIMEOUT_MS }).catch(function (e: unknown): void {
     if (state.current) showStreamError('generic', errMsg(e), true);
   });
 }
@@ -1531,7 +1593,8 @@ function togglePause(): void {
 function zap(delta: number): void {
   const len = state.view.length;
   if (!len) return;
-  let idx = (state.current ? state.view.indexOf(state.current) : -1);
+  let idx = (state.current ? viewIndex.get(state.current) : undefined);
+  if (idx === undefined) idx = -1;
   idx = idx < 0 ? (delta > 0 ? 0 : len - 1) : (idx + delta + len) % len;
   playChannel(state.view[idx]);
   showOsd();
@@ -1557,8 +1620,8 @@ function updateOsdState(): void {
 /** Shows current channel and EPG details and schedules hiding after 4.5 seconds; no-ops without a current channel. */
 function showOsd(): void {
   if (!state.current) return;
-  const idx = (state.current ? state.view.indexOf(state.current) : -1);
-  osdNum.textContent = idx >= 0 ? (idx + 1) + ' / ' + state.view.length : '';
+  const idx = (state.current ? viewIndex.get(state.current) : undefined);
+  osdNum.textContent = idx !== undefined ? (idx + 1) + ' / ' + state.view.length : '';
   osdName.textContent = state.current.name;
   osdGroup.textContent = state.current.group;
   updateOsdState();
@@ -2070,7 +2133,7 @@ function remoteState(): RemoteState {
     group: state.group,
     groups: (state.groups || []).map(function (g: Group): Group { return { key: g.key, label: g.label, count: g.count }; }),
     favGroup: GROUP_FAV,
-    favCount: state.channels.filter(isFav).length,
+    favCount: favs.size,
     blocked: Array.from(blockedGroups),
     pinSet: !!parentPin,
     locked: !pinUnlocked,
@@ -2260,7 +2323,7 @@ window.RemoteAPI = {
         if (state.current) scheduleEpgReload(); else epgReload(true);
         return { ok: true, note: 'EPG: ' + (cmd.url || 'выключен') };
       }
-      return { ok: false, error: 'неизвестная команда: ' + name };
+      return { ok: false, error: trLoose('неизвестная команда: {0}', name) };
     } catch (e) { return { ok: false, error: String((e && typeof e === 'object' && 'message' in e && e.message) || e) }; }
   }
 };

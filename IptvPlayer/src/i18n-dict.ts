@@ -136,7 +136,7 @@ export const DICT: Record<string, [string, string]> = {
   "Кэш очищен: освобождено {0}": ["Cache geleert: {0} freigegeben", "Cache cleared: {0} freed"],
   "Не удалось очистить кэш: {0}": ["Cache konnte nicht geleert werden: {0}", "Could not clear the cache: {0}"],
 
-  /* ошибки потока (на трёх языках одновременно) */
+  /* ошибки потока (крупно на языке интерфейса, дублируются на двух других) */
   "Нет связи с каналом": ["Keine Verbindung zum Kanal", "No connection to the channel"],
   "Канал не отвечает": ["Der Kanal antwortet nicht", "The channel is not responding"],
   "Канал не найден на сервере": ["Kanal auf dem Server nicht gefunden", "Channel not found on the server"],
@@ -148,6 +148,8 @@ export const DICT: Record<string, [string, string]> = {
   "Проблема со звуком": ["Tonproblem", "Audio problem"],
   "Ошибка воспроизведения": ["Wiedergabefehler", "Playback error"],
   "Повтор через {0} с… ({1}/{2})": ["Neuer Versuch in {0} s… ({1}/{2})", "Retrying in {0} s… ({1}/{2})"],
+  "Нет соединения с интернетом. Проверьте сеть и повторите попытку.": ["Keine Internetverbindung. Bitte Netzwerk prüfen und erneut versuchen.", "No internet connection. Check your network and try again."],
+  "устройство не в сети": ["Gerät offline", "device is offline"],
 
   /* главная страница (index.html) */
   "Загрузить": ["Laden", "Load"],

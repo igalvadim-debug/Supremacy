@@ -71,6 +71,7 @@ export interface NavMetadata {
   _group?: string;
   _channel?: Channel;
   _idx?: number;
+  _more?: boolean;
   _epg?: { root: HTMLElement; et: HTMLElement; fill: HTMLElement };
 }
 export type NavElement = HTMLElement & NavMetadata;
