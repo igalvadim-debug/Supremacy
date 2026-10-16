@@ -318,6 +318,7 @@ export const DICT: Record<string, [string, string]> = {
   "не указана ссылка на EPG": ["EPG-Link nicht angegeben", "EPG link not specified"],
   "файл EPG не найден: {0}": ["EPG-Datei nicht gefunden: {0}", "EPG file not found: {0}"],
   "не удалось создать файл": ["Datei konnte nicht erstellt werden", "could not create the file"],
+  "не удалось открыть файл": ["Datei konnte nicht geöffnet werden", "could not open the file"],
   "не удалось открыть файл для записи": ["Datei konnte nicht zum Schreiben geöffnet werden", "could not open the file for writing"],
   "не удалось сохранить файл": ["Datei konnte nicht gespeichert werden", "could not save the file"],
   "соединение прервано до конца файла": ["Verbindung vor Dateiende abgebrochen", "connection lost before the end of the file"],
