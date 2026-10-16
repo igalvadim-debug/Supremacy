@@ -13,6 +13,7 @@ const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const LS_URL = 'iptv.playlistUrl', LS_LAST = 'iptv.lastChannel', LS_FAVS = 'iptv.favs', LS_GROUP = 'iptv.group';
 const LS_BUF = 'iptv.bufferMs', LS_AUTO = 'iptv.autoReload', LS_HOURS = 'iptv.reloadHours', LS_RELOADED = 'iptv.lastReload';
 const LS_ENTRY = 'iptv.entry', LS_SRV = 'iptv.serverOn', LS_PORT = 'iptv.serverPort', LS_EPG = 'iptv.epgOn', LS_EPGFILE = 'iptv.epgFile';
+const LS_NTFY_CODE = 'iptv.ntfyCode', LS_NTFY_TOKEN = 'iptv.ntfyToken', LS_NTFY_SERVER = 'iptv.ntfyServer', LS_NTFY_CODE_AT = 'iptv.ntfyCodeAt';
 const PAGE_SIZE = 300;
 const GROUP_ALL = '', GROUP_FAV = '\u0001', GROUP_NONE = '\u0002';
 const HTTP_HEADERS = {
@@ -39,6 +40,9 @@ const settingsEl = $('settings'), bufRange = requiredElement<HTMLInputElement>('
 const autoChk = requiredElement<HTMLInputElement>('autoChk'), hoursNum = requiredElement<HTMLInputElement>('hoursNum'), lastReloadEl = $('lastReload'), toastEl = $('toast');
 const epgChk = requiredElement<HTMLInputElement>('epgChk'), epgInfoEl = $('epgInfo'), srvChk = requiredElement<HTMLButtonElement>('srvChk'), srvAddr = $('srvAddr'), autoStartChk = requiredElement<HTMLInputElement>('autoStartChk');
 const libraryEl = $('library'), libList = $('libList'), fileList = $('fileList'), srvBtn = requiredElement<HTMLButtonElement>('srvBtn'), srvInfo = $('srvInfo');
+const ntfyPull = requiredElement<HTMLButtonElement>('ntfyPull'), ntfyNewBtn = requiredElement<HTMLButtonElement>('ntfyNew'), ntfyCodeEl = $('ntfyCode');
+const ntfyTokenEl = requiredElement<HTMLInputElement>('ntfyToken'), ntfyTokenSave = requiredElement<HTMLButtonElement>('ntfyTokenSave');
+const ntfyServerEl = requiredElement<HTMLInputElement>('ntfyServer');
 
 /* ================= Утилиты ================= */
 /** Reads a stored value, returning an empty string for missing keys or storage errors. */
@@ -142,6 +146,7 @@ const epg: EpgState = { enabled: lsGet(LS_EPG) !== '0', file: lsGet(LS_EPGFILE),
 let headerEpgUrl: string = '';
 let headerCatchup: CatchupDefaults = { mode: '', source: '', days: 0 };
 let srv: ServerStatus = { running: false, port: 0, addresses: [] };
+let ntfyCode: string = lsGet(LS_NTFY_CODE), ntfyToken: string = lsGet(LS_NTFY_TOKEN), ntfyServer: string = lsGet(LS_NTFY_SERVER) || 'https://ntfy.sh/', ntfyCodeAt: number = parseInt(lsGet(LS_NTFY_CODE_AT), 10) || 0;
 const blockedGroups = new Set<string>();
 try { (JSON.parse(lsGet('iptv.blocked') || '[]') as unknown[]).forEach(function (k: unknown): void { blockedGroups.add(String(k)); }); } catch (e) { /* ignore */ }
 function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
@@ -731,6 +736,108 @@ async function setServer(on: boolean): Promise<void> {
   renderServerUi();
 }
 
+/* ================= Приём плейлиста по коду (ntfy) ================= */
+/** Normalizes an ntfy server base URL: adds a scheme if missing and a trailing slash. */
+function normNtfyServer(v: string): string {
+  v = (v || '').trim();
+  if (!v) return 'https://ntfy.sh/';
+  if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
+  return v.replace(/\/+$/, '') + '/';
+}
+/** Generates a 15-character code (A–Z0–9) used as the ntfy topic name. */
+function genNtfyCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let out = '';
+  try {
+    const r = new Uint32Array(15); crypto.getRandomValues(r);
+    for (let i = 0; i < 15; i++) out += chars[r[i] % chars.length];
+  } catch (e) {
+    for (let i = 0; i < 15; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+/** Code lifetime: the player accepts pulls only within this window after the code is shown. */
+const NTFY_TTL_MS = 8 * 60 * 1000;
+/** True when a code is set and its window has passed. */
+function ntfyExpired(): boolean { return !!ntfyCode && ntfyCodeAt > 0 && (Date.now() - ntfyCodeAt) > NTFY_TTL_MS; }
+/** Stores a new receiver code (stamped with now) and repaints the code line. */
+function setNtfyCode(c: string): void {
+  ntfyCode = c; ntfyCodeAt = c ? Date.now() : 0;
+  lsSet(LS_NTFY_CODE, c); lsSet(LS_NTFY_CODE_AT, c ? String(ntfyCodeAt) : '');
+  renderNtfyUi();
+}
+/** Clears the code and its timestamp (expiry, consumption, or manual reset). */
+function clearNtfyCode(): void {
+  ntfyCode = ''; ntfyCodeAt = 0;
+  lsSet(LS_NTFY_CODE, ''); lsSet(LS_NTFY_CODE_AT, '');
+  renderNtfyUi();
+}
+/** Shows the current receiver code with the remaining minutes, or a hint to create one. */
+function renderNtfyUi(): void {
+  if (ntfyCodeEl) {
+    if (ntfyCode && !ntfyExpired()) {
+      const left = Math.max(0, Math.ceil((NTFY_TTL_MS - (Date.now() - ntfyCodeAt)) / 60000));
+      ntfyCodeEl.textContent = tr('Код приёма: {0} · {1} мин', ntfyCode, left);
+    } else {
+      ntfyCodeEl.textContent = tr('Код приёма не задан');
+    }
+  }
+  ntfyServerEl.value = ntfyServer;
+  ntfyTokenEl.value = ntfyToken;
+}
+/** Periodic sweep: clears an expired code (no code, no requests after the window). */
+function ntfyTick(): void {
+  if (ntfyCode && ntfyExpired()) { clearNtfyCode(); showToast(tr('Код истёк — попробуйте позже')); }
+  else if (ntfyCode) renderNtfyUi();
+}
+/** Applies a pushed value: an http(s) URL loads via loadFromUrl, anything else is treated as M3U text. */
+function applyPushed(value: string): void {
+  const v = (value || '').trim();
+  if (!v) return;
+  if (v.indexOf('\n') < 0 && /^https?:\/\//i.test(v)) {
+    urlInput.value = v; lsSet(LS_URL, v); loadFromUrl();
+    setStatus(tr('Получена ссылка на плейлист'), 'ok');
+    return;
+  }
+  try {
+    applyPlaylist(v, 'код', null, {});
+    showToast(tr('Плейлист применён'));
+  } catch (e) {
+    showToast(tr('Плейлист не принят: {0}', errMsg(e)), 3500);
+  }
+}
+/** One-shot fetch: pulls the topic once, applies the newest message whose code matches, then erases the code. */
+function pullNtfy(): void {
+  if (!ntfyCode) { showToast(tr('Нет кода — нажмите «Новый код»')); return; }
+  if (ntfyExpired()) { clearNtfyCode(); showToast(tr('Код истёк — попробуйте позже')); return; }
+  const code = ntfyCode;
+  showToast(tr('Проверяю…'));
+  const hdr: Record<string, string> = {};
+  if (ntfyToken) hdr['Authorization'] = 'Bearer ' + ntfyToken;
+  fetch(ntfyServer + encodeURIComponent(code) + '/json?poll=1', { cache: 'no-store', headers: hdr })
+    .then(function (r: Response): Promise<string> { return r.ok ? r.text() : Promise.resolve(''); })
+    .then(function (txt: string): void {
+      if (!txt) { showToast(tr('Плейлист не найден')); return; }
+      const lines = txt.split('\n');
+      let found: string | null = null;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        let msg: { event?: string; message?: string };
+        try { msg = JSON.parse(line) as { event?: string; message?: string }; } catch (e) { continue; }
+        if (msg.event !== 'message' || typeof msg.message !== 'string') continue;
+        let payload: { c?: string; v?: string };
+        try { payload = JSON.parse(msg.message) as { c?: string; v?: string }; } catch (e) { continue; }
+        if (payload && payload.c === code && typeof payload.v === 'string' && payload.v.trim()) found = payload.v;
+      }
+      if (found === null) { showToast(tr('Для этого кода ничего нет')); return; }
+      applyPushed(found);
+      clearNtfyCode();
+      showToast(tr('Плейлист принят, код стёрт'));
+    })
+    .catch(function (): void { showToast(tr('Нет связи с ntfy'), 3500); });
+}
+
 /* ================= Группы и фильтр ================= */
 /** Returns the channel group, using GROUP_NONE for an empty group. */
 function gkey(ch: Channel): string { return ch.group || GROUP_NONE; }
@@ -778,6 +885,7 @@ function armUnlock(): void {
 /* ================= Экранный PIN-пад (3 цифры) ================= */
 let pinMode: 'unlock' | 'set' = 'unlock', pinBuf: string = '';
 let pinFailCount: number = 0;
+let pinJustOpened: boolean = false;
 let pinBlockedUntil: number = 0;
 const PIN_MAX_FAILS = 5;
 /** Shares failed attempts and cooldown across the keypad, settings and remote commands. */
@@ -804,6 +912,8 @@ function pinOpen(mode: 'set' | 'unlock'): void {
   pinTitle.textContent = mode === 'set' ? tr('Задайте PIN из 3 цифр') : tr('Введите PIN (3 цифры)');
   pinRenderDots(); pinRenderGrid();
   pinpadEl.classList.add('open');
+  pinJustOpened = true;
+  window.setTimeout(function (): void { pinJustOpened = false; }, 0);
   const b = pinGrid.querySelector('button'); if (b) setFocus(b, false);
 }
 function pinClose(): void {
@@ -1819,6 +1929,14 @@ $('clearCacheBtn').addEventListener('click', async function (): Promise<void> {
 });
 srvChk.addEventListener('click', function (): void { setServer(!srv.running); });
 srvBtn.addEventListener('click', function (): void { setServer(!srv.running); });
+ntfyNewBtn.addEventListener('click', function (): void { setNtfyCode(genNtfyCode()); });
+ntfyPull.addEventListener('click', pullNtfy);
+ntfyTokenSave.addEventListener('click', function (): void {
+  ntfyServer = normNtfyServer(ntfyServerEl.value);
+  ntfyToken = ntfyTokenEl.value.trim();
+  lsSet(LS_NTFY_SERVER, ntfyServer); lsSet(LS_NTFY_TOKEN, ntfyToken);
+  renderNtfyUi(); showToast(tr('Сохранено'));
+});
 $('libClose').addEventListener('click', closeLibrary);
 $('reloadNow').addEventListener('click', function (): void { reloadPlaylist(true); });
 $('closeSettings').addEventListener('click', closeSettings);
@@ -1895,9 +2013,10 @@ grid.addEventListener('click', function (e: MouseEvent): void {
 });
 
 /* ================= D-Pad навигация ================= */
-/** Returns visible navigation targets within the first open overlay, or the whole document if none is open. */
+/** Returns visible navigation targets within the topmost open overlay (last in DOM order), or the whole document if none is open. */
 function navItems(): NavElement[] {
-  const root = document.querySelector('.overlay.open') || document;
+  const opens = document.querySelectorAll('.overlay.open');
+  const root: ParentNode = opens.length ? (opens[opens.length - 1] as HTMLElement) : document;
   return Array.from(root.querySelectorAll<NavElement>('[data-nav]')).filter(function (el: NavElement): boolean { return el.getClientRects().length > 0; });
 }
 /** Moves the navigation highlight and blurs another text input; scrolls the target into view unless scroll is false. */
@@ -2090,6 +2209,8 @@ window.addEventListener('focus', function (): void { window.setTimeout(restoreNa
 // Мышь / тач и синхронизация подсветки с реальным фокусом
 let tapEl: NavElement | null = null, tapAt: number = 0;
 document.addEventListener('click', function (e: MouseEvent): void {
+  // Клик, открывший PIN-пад, не должен перехватывать фокус на кнопку-открыватель и закрывать пад
+  if (pinJustOpened) return;
   // Кнопки панели плеера обрабатываются своими обработчиками: иначе после смены режима клик снова откроет полный экран
   if (pinpadOpen() && !((e.target as Element).closest && (e.target as Element).closest<NavElement>('.pinpad-panel'))) { pinClose(); return; }
   if ((e.target as Element).closest && (e.target as Element).closest<NavElement>('.card .star')) return;   // звёздочку обрабатывает свой обработчик
@@ -2380,6 +2501,12 @@ window.RemoteAPI = {
         urlInput.value = parsedLu.href; lsSet(LS_URL, parsedLu.href); loadFromUrl();
         return { ok: true, note: 'гружу плейлист по ссылке' };
       }
+      if (name === 'loadText') {
+        const lt = String(cmd.text || '');
+        if (!lt.trim()) return { ok: false, error: 'пустой плейлист' };
+        try { applyPlaylist(lt, 'list', null, {}); } catch (e) { return { ok: false, error: String((e as Error).message) }; }
+        return { ok: true, note: 'плейлист применён' };
+      }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
       if (name === 'openFile') {
         if (!cmd.name) return { ok: false, error: 'не указано имя файла' };
@@ -2469,6 +2596,9 @@ async function boot(): Promise<void> {
   if (native()) {
     if (lsGet(LS_SRV) === '1') setServer(true); else refreshServerStatus();
   }
+  renderNtfyUi();
+  // Приём: раз в 30 с гасим истёкший код (после 15 мин — ни кода, ни запросов)
+  window.setInterval(ntfyTick, 30000);
   let entry: PlaylistEntry | undefined | null = null, id = lsGet(LS_ENTRY);
   if (id) { try { entry = await libGet(id); } catch (e) { entry = null; } }
   if (entry) await openEntry(entry.id, true);

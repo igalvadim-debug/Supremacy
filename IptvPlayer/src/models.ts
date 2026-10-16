@@ -42,7 +42,7 @@ export interface ServerFile { name: string; size: number; modified: number; }
 export interface FilesResponse { files: ServerFile[]; }
 export interface UploadResponse { ok?: boolean; size?: number; error?: string; }
 export interface RemoteCommand {
-  cmd?: string; url?: string; name?: string; key?: string; pin?: string;
+  cmd?: string; url?: string; name?: string; key?: string; pin?: string; text?: string;
   current?: string | number; on?: boolean | string | number; i?: number | string;
   q?: string; target?: string; sources?: string | string[];
 }
