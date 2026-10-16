@@ -68,6 +68,8 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
 </details>
 <details id="ntcfg">
   <summary data-i18n>Приём по коду (ntfy)</summary>
+  <div class="row"><input id="ntcode" readonly placeholder="— нет кода —" autocomplete="off"><button id="ntcopy" data-i18n>Копировать</button></div>
+  <div class="row"><button id="ntnew" data-i18n>Новый код</button><span class="status" id="ntcstat" style="flex:1"></span></div>
   <div class="row"><input id="ntsrv" placeholder="https://ntfy.sh/" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
   <div class="row"><input id="nttok" placeholder="Токен (необязательно)" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="ntsvsave" data-i18n>Сохранить</button></div>
   <div class="status" id="ntsmsg"></div>

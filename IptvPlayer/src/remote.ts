@@ -53,6 +53,8 @@ function render(s: RemoteResponse | null): void {
   lastState = s;
   $('err').textContent = '';
   if (!ntPrefilled) { ntPrefilled = true; const a = document.getElementById('ntsrv'); if (a instanceof HTMLInputElement) a.value = s.ntfyServer || ''; const b = document.getElementById('nttok'); if (b instanceof HTMLInputElement) b.value = s.ntfyToken || ''; }
+  const ce = document.getElementById('ntcode'); if (ce instanceof HTMLInputElement) ce.value = s.ntfyCode || '';
+  const cs = document.getElementById('ntcstat'); if (cs) cs.textContent = (s.ntfyCode && s.ntfyCodeAt) ? tr('живёт {0} мин', Math.max(0, Math.ceil((8 * 60 * 1000 - (Date.now() - s.ntfyCodeAt)) / 60000))) : '';
   $('now').textContent = s.current ? s.current.name : tr('Канал не выбран');
   if (s.current && s.current.group) {
     const sm = document.createElement('small');
@@ -143,6 +145,15 @@ $('plload').onclick = function (): void {
     if (s && s.ok === false) { $('plmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('не удалось'))); return; }
     $('plmsg').textContent = tr('Плейлист загружается…'); setTimeout(poll, 3000);
   }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
+};
+$('ntnew').onclick = function (): void { api('cmd=newNtfyCode').then(render); };
+$('ntcopy').onclick = function (): void {
+  const el = document.getElementById('ntcode');
+  if (!(el instanceof HTMLInputElement) || !el.value) { $('ntsmsg').textContent = tr('Нет кода'); return; }
+  el.focus(); el.select(); try { el.setSelectionRange(0, el.value.length); } catch (e) { /* ок */ }
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  if (!ok && navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(el.value).catch(function (): void { /* вручную */ }); ok = true; }
+  $('ntsmsg').textContent = ok ? tr('Код скопирован') : tr('Скопируйте вручную');
 };
 $('ntsvsave').onclick = function (): void {
   $('ntsmsg').textContent = tr('Сохраняю…');

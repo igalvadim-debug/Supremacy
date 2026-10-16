@@ -45,8 +45,8 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
   .flagbtn .flag svg { display:block; width:1.6rem; height:1.1rem; border-radius:.15rem; }
   .flagbtn.on { box-shadow:0 0 0 .15rem var(--accent); }
 </style>
-  <script type="module" crossorigin src="/assets/remote-CKs5_dP2.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/i18n-CQP5Q8nV.js">
+  <script type="module" crossorigin src="/assets/remote-BNhqLstT.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/i18n-9ldS3-pL.js">
 </head>
 <body>
 <header>
@@ -70,6 +70,8 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
 </details>
 <details id="ntcfg">
   <summary data-i18n>Приём по коду (ntfy)</summary>
+  <div class="row"><input id="ntcode" readonly placeholder="— нет кода —" autocomplete="off"><button id="ntcopy" data-i18n>Копировать</button></div>
+  <div class="row"><button id="ntnew" data-i18n>Новый код</button><span class="status" id="ntcstat" style="flex:1"></span></div>
   <div class="row"><input id="ntsrv" placeholder="https://ntfy.sh/" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
   <div class="row"><input id="nttok" placeholder="Токен (необязательно)" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="ntsvsave" data-i18n>Сохранить</button></div>
   <div class="status" id="ntsmsg"></div>

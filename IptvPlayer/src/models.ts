@@ -55,7 +55,7 @@ export interface RemoteSnapshot {
   playing: boolean; paused: boolean; count: number; viewCount: number;
   query: string; group: string; groups: Group[]; favGroup: string; favCount: number;
   blocked: string[]; pinSet: boolean; locked: boolean; channels: RemoteChannel[];
-  ntfyServer?: string; ntfyToken?: string;
+  ntfyServer?: string; ntfyToken?: string; ntfyCode?: string; ntfyCodeAt?: number;
 }
 /** Some commands return only an acknowledgment, others a complete snapshot. */
 export interface RemoteResponse extends Partial<RemoteSnapshot> {

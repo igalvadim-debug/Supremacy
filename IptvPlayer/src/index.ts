@@ -2284,6 +2284,8 @@ function remoteState(): RemoteState {
     locked: !pinUnlocked,
     ntfyServer: ntfyServer,
     ntfyToken: ntfyToken,
+    ntfyCode: ntfyCode,
+    ntfyCodeAt: ntfyCodeAt,
     channels: chans
   };
 }
@@ -2516,6 +2518,7 @@ window.RemoteAPI = {
         renderNtfyUi();
         return remoteState();
       }
+      if (name === 'newNtfyCode') { setNtfyCode(genNtfyCode()); return remoteState(); }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
       if (name === 'openFile') {
         if (!cmd.name) return { ok: false, error: 'не указано имя файла' };
