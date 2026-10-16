@@ -149,7 +149,7 @@ function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(b
 function blockKeyFromRemote(rawKey: string): string { return rawKey === '' ? GROUP_NONE : rawKey; }
 let parentPin: string = lsGet('iptv.pin') || '';
 let pinUnlocked: boolean = false;
-/** true, если в этом плейлисте уже есть заблокированные группы — разблокировка без PIN не допускается. */
+/** Returns whether any group keys are blocked, even if absent from the current playlist. */
 function hasBlockedGroups(): boolean { return blockedGroups.size > 0; }
 
 /* ================= Состояние ================= */
@@ -1728,6 +1728,7 @@ function updateLastReload(): void {
   else if (ent.kind === 'file') lastReloadEl.textContent = tr('Открыт файл «{0}». Кнопка «Обновить» перечитывает его из «Загрузок».', ent.fileName);
   else lastReloadEl.textContent = t ? tr('Последнее обновление: {0}', new Date(t).toLocaleString(locale())) : tr('Плейлист ещё не обновлялся.');
 }
+/** Refreshes settings controls and playlist, EPG, PIN, server, and native autostart status. */
 function syncSettingsUi(): void {
   bufRange.value = String(settings.bufferMs);
   bufNum.value = String(settings.bufferMs);
@@ -1740,7 +1741,7 @@ function syncSettingsUi(): void {
   renderServerUi();
   syncAutoStartUi();
 }
-/** Shows the current parental-PIN state in settings so the buttons reflect reality. */
+/** Displays PIN setup/unlock status and, when set, the blocked-group count; no-ops if the status element is absent. */
 function renderPinStatus(): void {
   const el = document.getElementById('pinStatus');
   if (!el) return;
@@ -1831,6 +1832,7 @@ $('pinSetBtn').addEventListener('click', function (): void {
   if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast(tr('Сначала введите текущий PIN')); return; }
   pinOpen('set');
 });
+/** Removes the PIN only when no group keys remain blocked, prompting for the current PIN unless already unlocked. */
 $('pinClearBtn').addEventListener('click', function (): void {
   if (!parentPin) { showToast(tr('PIN не задан')); return; }
   // под снятым PIN заблокированные группы перестанут скрываться, поэтому сначала нужно снять все блокировки
@@ -2218,7 +2220,12 @@ function remoteDelChannel(cmd: RemoteCommand): RemoteResponse {
   buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
-/** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
+/**
+ * Removes all channels in cmd.key (null or GROUP_NONE means ungrouped) and clears the group's block.
+ * While locked, deleting a blocked key requires cmd.pin; successful verification unlocks groups.
+ * Prunes favorites absent from the remaining channels and clears matching current/group selections.
+ * Returns refreshed remote state, or an error result if PIN setup or verification fails or no channels match.
+ */
 function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
   // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
   // пустой ключ (rawKey === '') означает «без группы» и хранится в blockedGroups как GROUP_NONE
@@ -2261,7 +2268,10 @@ function persistChannels(): void {
 }
 /**
  * Moves channels from cmd.sources (an array or pipe-separated string of group names) into cmd.target.
- * GROUP_NONE as target means ungrouped. Persists edits and returns refreshed remote state with a moved count.
+ * GROUP_NONE as target means ungrouped; ungrouped sources use the empty string in an array.
+ * While locked, blocked source or target keys require cmd.pin; successful verification unlocks groups.
+ * Missing PIN setup for a blocked source or failed verification returns an error result without moving channels.
+ * Persists edits and returns refreshed remote state with the number of matching channels, even if already in the target.
  */
 function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
   const target = String(cmd.target || '');
@@ -2298,7 +2308,12 @@ function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
   persistChannels();
   const s = remoteState(); s.moved = moved; return s;
 }
-/** Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0"; refreshes visibility and returns remote state. */
+/**
+ * Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0".
+ * Blocking requires a configured PIN. Unblocking while any keys are blocked and the player is locked
+ * requires cmd.pin; successful verification unlocks groups. Failed requirements return an error result.
+ * Refreshes visibility and returns remote state on success.
+ */
 function remoteBlockGroup(cmd: RemoteCommand): RemoteResponse {
   const key = String(cmd.key || '');
   const off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
@@ -2325,6 +2340,11 @@ window.RemoteAPI = {
    * Returns state, command data, or an acknowledgment. Unknown commands and synchronous exceptions become
    * { ok: false, error } results. Asynchronous loads, saves, and resets may still be pending after acknowledgment;
    * lastNote reports later save/reset messages.
+   * loadUrl requires a trimmed HTTP(S) prefix; openFile requires a nonempty name. Their acknowledgments
+   * do not confirm loading succeeded; load failures are displayed in the player.
+   * setPin keeps at most three digits from cmd.pin; an empty result removes the PIN only if no keys are blocked.
+   * Changing an existing PIN while locked requires cmd.current. unlock requires a configured, valid cmd.pin.
+   * PIN checks share the five-attempt, ten-second cooldown; validation failures return error results.
    */
   handle: function (cmd: RemoteCommand): RemoteState | RemoteResponse {
     try {

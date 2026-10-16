@@ -11,7 +11,11 @@ function api(q: string): Promise<RemoteResponse> {
 }
 /** Encodes a group key for a query parameter, preserving the empty key for all channels. */
 function groupKey(k: string): string { return k === '' ? '' : encodeURIComponent(k); }
-/** Унифицированная отправка команд с обработкой ошибок: ok:false показывает ошибку, сетевой сбой — «нет связи». */
+/**
+ * Sends an encoded remote-command query and calls onOk unless the response is missing or ok is false.
+ * Displays API errors in msgEl (defaults to gmsg); request/JSON failures and errors thrown by onOk
+ * become connection-error messages there. Returns without waiting for the request.
+ */
 function runCmd(q: string, onOk: (s: RemoteResponse) => void, msgEl?: HTMLElement): void {
   api(q).then(function (s: RemoteResponse): void {
     if (!s || s.ok === false) { const m = msgEl || $('gmsg'); m.textContent = tr('Ошибка: {0}', trLoose((s && s.error) || tr('не удалось'))); return; }
@@ -20,9 +24,13 @@ function runCmd(q: string, onOk: (s: RemoteResponse) => void, msgEl?: HTMLElemen
 }
 /** Последнее состояние плеера (нужно обработчикам PIN: locked/pinSet). */
 let lastState: RemoteResponse | null = null;
-/** Доступ к заблокированности из обработчиков кнопок PIN. */
+/** Returns PIN flags from the last accepted player response, defaulting each missing flag to false. */
 function s_pinState(): { locked: boolean; pinSet: boolean } { return { locked: !!(lastState && lastState.locked), pinSet: !!(lastState && lastState.pinSet) }; }
-/** Удаление группы: скрытые под PIN требуют подтверждения PIN (из поля пульта или через prompt). */
+/**
+ * Confirms group deletion, requiring a PIN from the input or a prompt when s lists the group as blocked.
+ * Cancellation or an empty required PIN sends no command. Renders the response on success;
+ * command failures are displayed by runCmd. A missing snapshot skips the local PIN requirement.
+ */
 function askDelGroup(gr: Group, s: RemoteResponse | null): void {
   if (!confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) return;
   const isBlocked = !!(s && (s.blocked || []).indexOf(gr.key) !== -1);
@@ -117,6 +125,10 @@ $('q').oninput = function (): void {
   clearTimeout(t);
   t = window.setTimeout(function (): void { api('cmd=search&q=' + encodeURIComponent(val('q'))).then(render); }, 250);
 };
+/**
+ * Requests loading the trimmed playlist URL if it starts with HTTP(S), then polls after three seconds.
+ * Displays validation, API, and connection errors; acknowledgment does not confirm playlist loading succeeded.
+ */
 $('plload').onclick = function (): void {
   const u = val('plurl').trim();
   if (!u) { $('plmsg').textContent = tr('Введите ссылку на плейлист'); return; }
@@ -160,8 +172,12 @@ $('plreset').onclick = function (): void {
     if (s && s.ok) { $('plmsg').textContent = trLoose(s.note || tr('Сбрасываю…')); showNoteLater(); setTimeout(poll, 3000); }
     else { $('plmsg').textContent = tr('Ошибка: {0}', trLoose((s && s.error) || tr('не удалось'))); }
   }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
-};  /** Убирает url из списка загрузки, чтобы следующая загрузка не открылась сразу после перезагрузки ТВ. */
+};  /** Clears the remote playlist URL input if present; does not change the player's stored URL. */
 function stripPlUrl(): void { const pi = document.getElementById('plurl'); if (pi instanceof HTMLInputElement) pi.value = ''; }
+/**
+ * Uploads the first selected file, requests opening it, then clears the URL input and polls after three seconds.
+ * Displays upload and open-command errors; an open acknowledgment does not confirm the file was loaded.
+ */
 $('plup').onchange = function (): void {
   const f = fileAt('plup', 0);
   if (!f) return;
@@ -182,6 +198,10 @@ $('plup').onchange = function (): void {
 
 /* Связка чекбокса группы с её ключом — типизированная (WeakMap вместо custom-свойства _key). */
 const chkKeys = new WeakMap<HTMLInputElement, string>();
+/**
+ * Rebuilds group checkboxes, block/delete actions, and merge targets from the snapshot.
+ * Recreates unchecked sources and attempts to retain the previous target; unblocking asks for a PIN.
+ */
 function renderGroupsList(s: RemoteResponse): void {
   const box = document.getElementById('glist');
   if (!box) return;
@@ -221,6 +241,10 @@ function renderGroupsList(s: RemoteResponse): void {
   });
   if (prev) { try { sel.value = prev; } catch (e) { /* ignore */ } }
 }
+/**
+ * Confirms merging checked source groups into a nonempty target outside that selection.
+ * Requires a PIN when the last response lists a blocked source; displays command errors or the moved count.
+ */
 $('mmerge').onclick = function (): void {
   const target = val('mtarget');
   if (!target) { $('gmsg').textContent = tr('Выберите целевую группу'); return; }
@@ -244,6 +268,7 @@ $('mmerge').onclick = function (): void {
     $('gmsg').textContent = tr('Объединено каналов: {0}', (s && s.moved) || 0); render(s);
   });
 };
+/** Requests a three-digit PIN from the input, also sending that input as the current PIN when one is already set. */
 $('pinset').onclick = function (): void {
   const p = val('pin').trim();
   if (!/^\d{3}$/.test(p)) { $('gmsg').textContent = tr('PIN должен состоять из 3 цифр'); return; }
@@ -262,6 +287,7 @@ $('pinset').onclick = function (): void {
     render(s);
   });
 };
+/** Requests PIN removal using the input or a prompted current PIN; displays player validation errors via runCmd. */
 $('pinclear').onclick = function (): void {
   // снятие PIN = setPin с пустым значением; плеер всегда требует текущий PIN (cmd.current)
   let cur = val('pin').trim();
@@ -272,6 +298,7 @@ $('pinclear').onclick = function (): void {
     render(s);
   });
 };
+/** Requests unlocking with an entered or prompted PIN, rendering success and displaying command failures via runCmd. */
 $('pinunlock').onclick = function (): void {
   const p = val('pin').trim() || (window.prompt(tr('PIN (3 цифры):')) || '').trim();
   if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
