@@ -145,8 +145,12 @@ let srv: ServerStatus = { running: false, port: 0, addresses: [] };
 const blockedGroups = new Set<string>();
 try { (JSON.parse(lsGet('iptv.blocked') || '[]') as unknown[]).forEach(function (k: unknown): void { blockedGroups.add(String(k)); }); } catch (e) { /* ignore */ }
 function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
+/** Returns the blocking key for a remote command group key: '' (all channels) blocks the ungrouped group (GROUP_NONE). */
+function blockKeyFromRemote(rawKey: string): string { return rawKey === '' ? GROUP_NONE : rawKey; }
 let parentPin: string = lsGet('iptv.pin') || '';
 let pinUnlocked: boolean = false;
+/** Returns whether any group keys are blocked, even if absent from the current playlist. */
+function hasBlockedGroups(): boolean { return blockedGroups.size > 0; }
 
 /* ================= Состояние ================= */
 const state: PlayerState = { channels: [], view: [], groups: [], group: lsGet(LS_GROUP), current: null, entry: null, mode: 'menu', renderCount: PAGE_SIZE };
@@ -332,7 +336,10 @@ async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
   if (loading) return;
   const url = urlInput.value.trim();
   if (!url) { setStatus(tr('Введите ссылку на плейлист.'), 'error'); return; }
-  if (!/^https?:\/\//i.test(url)) { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
+  // строгая проверка парсером URL: принимаем только http/https (regex пропускал «httpx://…»)
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(url); } catch (e) { setStatus(tr('Некорректная ссылка на плейлист'), 'error'); return; }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
   // Нет сети — не пытаемся грузить, сразу понятное сообщение + сохранённая копия, если есть.
   if (navigator.onLine === false) {
     if (cached && cached.text) {
@@ -760,8 +767,12 @@ function makeChip(key: string, label: string, count: number): NavElement {
 }
 /** Opens PIN setup if unset, relocks visible groups if unlocked, or prompts for the existing PIN. */
 function armUnlock(): void {
-  if (!parentPin) { pinOpen('set'); return; }
-  if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return; }
+  if (!parentPin) {
+    // без заданного PIN блокировка бессмысленна: сначала задаём PIN
+    pinOpen('set');
+    return;
+  }
+  if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return; }
   pinOpen('unlock');
 }
 /* ================= Экранный PIN-пад (3 цифры) ================= */
@@ -824,11 +835,11 @@ function pinSubmit(): void {
   const v = pinBuf;
   if (pinMode === 'set') {
     parentPin = v; lsSet('iptv.pin', v); pinUnlocked = true; pinFailCount = 0; pinBlockedUntil = 0;
-    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN задан'));
+    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('PIN задан'));
   } else if (verifyPin(v)) {
     pinUnlocked = true; pinClose(); buildGroups();
     if (state.group && blockedGroups.has(state.group)) state.group = GROUP_ALL;
-    computeView(); renderGroups(); renderGrid(false); showToast(tr('Скрытые группы показаны'));
+    computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('Скрытые группы показаны'));
   } else {
     pinBuf = ''; pinRenderDots();
     if (pinFailCount >= PIN_MAX_FAILS) {
@@ -1717,6 +1728,7 @@ function updateLastReload(): void {
   else if (ent.kind === 'file') lastReloadEl.textContent = tr('Открыт файл «{0}». Кнопка «Обновить» перечитывает его из «Загрузок».', ent.fileName);
   else lastReloadEl.textContent = t ? tr('Последнее обновление: {0}', new Date(t).toLocaleString(locale())) : tr('Плейлист ещё не обновлялся.');
 }
+/** Refreshes settings controls and playlist, EPG, PIN, server, and native autostart status. */
 function syncSettingsUi(): void {
   bufRange.value = String(settings.bufferMs);
   bufNum.value = String(settings.bufferMs);
@@ -1725,8 +1737,17 @@ function syncSettingsUi(): void {
   hoursNum.value = String(settings.reloadHours);
   updateLastReload();
   renderEpgInfo();
+  renderPinStatus();
   renderServerUi();
   syncAutoStartUi();
+}
+/** Displays PIN setup/unlock status and, when set, the blocked-group count; no-ops if the status element is absent. */
+function renderPinStatus(): void {
+  const el = document.getElementById('pinStatus');
+  if (!el) return;
+  if (!parentPin) el.textContent = tr('PIN не задан');
+  else if (pinUnlocked) el.textContent = tr('🔓 PIN задан, скрытые группы показаны ({0})', blockedGroups.size);
+  else el.textContent = tr('🔒 PIN задан, скрыто групп: {0}', blockedGroups.size);
 }
 /** Reads native autostart state when supported; disables the control if unavailable and ignores read failures. */
 function syncAutoStartUi(): void {
@@ -1811,15 +1832,18 @@ $('pinSetBtn').addEventListener('click', function (): void {
   if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast(tr('Сначала введите текущий PIN')); return; }
   pinOpen('set');
 });
+/** Removes the PIN only when no group keys remain blocked, prompting for the current PIN unless already unlocked. */
 $('pinClearBtn').addEventListener('click', function (): void {
   if (!parentPin) { showToast(tr('PIN не задан')); return; }
+  // под снятым PIN заблокированные группы перестанут скрываться, поэтому сначала нужно снять все блокировки
+  if (hasBlockedGroups()) { showToast(tr('Сначала разблокируйте все скрытые группы')); return; }
   // снятие PIN возможно только после разблокировки или ввода текущего PIN в настройках
   if (!pinUnlocked) {
     const p = window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):'));
     if (p === null) return;
     if (!verifyPin(String(p).trim())) { showToast(tr('Неверный PIN')); return; }
   }
-  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN снят'));
+  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('PIN снят'));
 });
 pinCancel.addEventListener('click', pinClose);
 
@@ -2178,17 +2202,62 @@ function remoteDelChannel(cmd: RemoteCommand): RemoteResponse {
   const before = state.channels.length;
   state.channels = state.channels.filter(function (x: Channel): boolean { return x.url !== cmd.url; });
   if (state.channels.length === before) return { ok: false, error: 'канал не найден' };
-  if (state.current && state.current.url === cmd.url) state.current = null;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  if (state.current && state.current.url === cmd.url) {
+    // канал играл — останавливаем воспроизведение и очищаем индикатор «сейчас играет» до сброса state.current
+    stopPlayback();
+    state.current = null;
+    nowTitle.textContent = '';
+    nowGroup.textContent = '';
+  }
+  // удаляем отметку «скрыта» для групп без оставшихся каналов (в blockedGroups ключи хранятся через gkey)
+  const remaining: Record<string, number> = {};
+  state.channels.forEach(function (x: Channel): void { remaining[gkey(x)] = 1; });
+  let blockedChanged = false;
+  Array.from(blockedGroups).forEach(function (k: string): void {
+    if (!remaining[k]) { blockedGroups['delete'](k); blockedChanged = true; }
+  });
+  if (blockedChanged) saveBlocked();
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
-/** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
+/**
+ * Removes all channels in cmd.key (null or GROUP_NONE means ungrouped) and clears the group's block.
+ * While locked, deleting a blocked key requires cmd.pin; successful verification unlocks groups.
+ * Prunes favorites absent from the remaining channels and clears matching current/group selections.
+ * Returns refreshed remote state, or an error result if PIN setup or verification fails or no channels match.
+ */
 function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
-  const key = (cmd.key === GROUP_NONE || cmd.key == null) ? '' : String(cmd.key);
+  // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
+  // пустой ключ (rawKey === '') означает «без группы» и хранится в blockedGroups как GROUP_NONE
+  const rawKey = cmd.key == null ? GROUP_NONE : String(cmd.key);
+  const blockKey = blockKeyFromRemote(rawKey);
+  if (blockedGroups.has(blockKey) && !pinUnlocked) {
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
+  const key = (rawKey === GROUP_NONE) ? '' : rawKey;
   const before = state.channels.length;
   state.channels = state.channels.filter(function (x: Channel): boolean { return (x.group || '') !== key; });
   if (state.channels.length === before) return { ok: false, error: 'группа не найдена' };
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  blockedGroups['delete'](key);
+  blockedGroups['delete'](rawKey);
+  blockedGroups['delete'](blockKey);
+  saveBlocked();
+  // из избранного (ключ — url канала) убираем url удалённых каналов, иначе счётчик «★ Избранное» завышается
+  const keptUrls: Record<string, number> = {};
+  state.channels.forEach(function (x: Channel): void { keptUrls[x.url] = 1; });
+  favs.forEach(function (u: string): void { if (!keptUrls[u]) favs['delete'](u); });
+  saveFavs();
+  if (state.current && (state.current.group || '') === key) {
+    // играл канал из удаляемой группы — останавливаем воспроизведение и очищаем индикатор до сброса state.current
+    stopPlayback();
+    state.current = null;
+    nowTitle.textContent = '';
+    nowGroup.textContent = '';
+  }
+  if (state.group === rawKey) state.group = GROUP_ALL;
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 let remoteNote: string = '';
@@ -2199,13 +2268,34 @@ function persistChannels(): void {
 }
 /**
  * Moves channels from cmd.sources (an array or pipe-separated string of group names) into cmd.target.
- * GROUP_NONE as target means ungrouped. Persists edits and returns refreshed remote state with a moved count.
+ * GROUP_NONE as target means ungrouped; ungrouped sources use the empty string in an array.
+ * While locked, blocked source or target keys require cmd.pin; successful verification unlocks groups.
+ * Missing PIN setup for a blocked source or failed verification returns an error result without moving channels.
+ * Persists edits and returns refreshed remote state with the number of matching channels, even if already in the target.
  */
 function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
   const target = String(cmd.target || '');
   let sources = cmd.sources;
-  if (typeof sources === 'string') sources = sources.split('|').filter(Boolean);
+  if (typeof sources === 'string') {
+    // источники кодируются по отдельности (remote.ts), поэтому сначала декодируем каждый элемент —
+    // иначе имя группы, содержащее «|», было бы разбито на несколько групп
+    sources = sources.split('|').map(function (s: string): string {
+      try { return decodeURIComponent(s); } catch (e) { return s; }
+    }).filter(Boolean);
+  }
   if (!Array.isArray(sources)) sources = [];
+  // перемещение каналов из скрытой под PIN группы требует авторизации — иначе пульт мог бы «слить» защищённую группу без PIN
+  const srcBlocked = sources.some(function (k: string): boolean { return blockedGroups.has(blockKeyFromRemote(k)); });
+  if (srcBlocked && !pinUnlocked) {
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
+  // нельзя перелить каналы в скрытую группу без PIN — это обошло бы защиту (каналы исчезли бы из меню)
+  if (target && blockedGroups.has(blockKeyFromRemote(target)) && !pinUnlocked) {
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
   const set: Record<string, number> = {};
   sources.forEach(function (s: string): void { set[s] = 1; });
   let moved = 0;
@@ -2214,25 +2304,34 @@ function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
     if (set[k]) { c.group = (target === GROUP_NONE ? '' : target); c.groupLower = c.group.toLowerCase(); moved++; }
   });
   if (state.group && set[state.group === GROUP_NONE ? '' : state.group]) state.group = GROUP_ALL;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   persistChannels();
   const s = remoteState(); s.moved = moved; return s;
 }
-/** Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0"; refreshes visibility and returns remote state. */
+/**
+ * Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0".
+ * Blocking requires a configured PIN. Unblocking while any keys are blocked and the player is locked
+ * requires cmd.pin; successful verification unlocks groups. Failed requirements return an error result.
+ * Refreshes visibility and returns remote state on success.
+ */
 function remoteBlockGroup(cmd: RemoteCommand): RemoteResponse {
   const key = String(cmd.key || '');
   const off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
   if (off) {
-    // разблокировка группы требует авторизации: pinUnlocked или корректный cmd.pin; блокировка — нет
-    if (parentPin && !pinUnlocked) {
+    // снятие блокировки с группы требует авторизации PIN, если под защитой уже есть скрытые группы
+    if (hasBlockedGroups() && !pinUnlocked) {
       if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
       pinUnlocked = true;
     }
     blockedGroups['delete'](key);
-  } else blockedGroups.add(key);
+  } else {
+    // блокировка без заданного PIN бессмысленна — сначала требуется установить PIN
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    blockedGroups.add(key);
+  }
   saveBlocked();
   if (state.group && blockedGroups.has(state.group) && !pinUnlocked) state.group = GROUP_ALL;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 window.RemoteAPI = {
@@ -2241,6 +2340,11 @@ window.RemoteAPI = {
    * Returns state, command data, or an acknowledgment. Unknown commands and synchronous exceptions become
    * { ok: false, error } results. Asynchronous loads, saves, and resets may still be pending after acknowledgment;
    * lastNote reports later save/reset messages.
+   * loadUrl requires a trimmed HTTP(S) prefix; openFile requires a nonempty name. Their acknowledgments
+   * do not confirm loading succeeded; load failures are displayed in the player.
+   * setPin keeps at most three digits from cmd.pin; an empty result removes the PIN only if no keys are blocked.
+   * Changing an existing PIN while locked requires cmd.current. unlock requires a configured, valid cmd.pin.
+   * PIN checks share the five-attempt, ten-second cooldown; validation failures return error results.
    */
   handle: function (cmd: RemoteCommand): RemoteState | RemoteResponse {
     try {
@@ -2267,9 +2371,21 @@ window.RemoteAPI = {
       }
       if (name === 'search') { searchInput.value = cmd.q || ''; applyFilter(); return remoteState(); }
       if (name === 'group') { setGroup(cmd.key || GROUP_ALL); return remoteState(); }
-      if (name === 'loadUrl') { urlInput.value = cmd.url || ''; lsSet(LS_URL, urlInput.value); loadFromUrl(); return { ok: true, note: 'гружу плейлист по ссылке' }; }
+      if (name === 'loadUrl') {
+        const lu = String(cmd.url || '').trim();
+        // строгая проверка: парсим как URL и принимаем только http/https (regex пропускал «httpx://…»)
+        let parsedLu: URL;
+        try { parsedLu = new URL(lu); } catch (e) { return { ok: false, error: 'некорректная ссылка' }; }
+        if (parsedLu.protocol !== 'http:' && parsedLu.protocol !== 'https:') return { ok: false, error: 'ссылка должна начинаться с http:// или https://' };
+        urlInput.value = parsedLu.href; lsSet(LS_URL, parsedLu.href); loadFromUrl();
+        return { ok: true, note: 'гружу плейлист по ссылке' };
+      }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
-      if (name === 'openFile') { if (cmd.name) openDownloadFile(cmd.name); return { ok: true, note: 'открываю файл ' + (cmd.name || '') }; }
+      if (name === 'openFile') {
+        if (!cmd.name) return { ok: false, error: 'не указано имя файла' };
+        openDownloadFile(cmd.name);
+        return { ok: true, note: 'открываю файл ' + cmd.name };
+      }
       if (name === 'rename') { const r1 = remoteRename(cmd); persistChannels(); return r1; }
       if (name === 'delChannel') { const r2 = remoteDelChannel(cmd); persistChannels(); return r2; }
       if (name === 'delGroup') { const r3 = remoteDelGroup(cmd); persistChannels(); return r3; }
@@ -2282,10 +2398,20 @@ window.RemoteAPI = {
           const cur = String(cmd.current != null ? cmd.current : '');
           if (!verifyPin(cur)) return { ok: false, error: 'требуется текущий PIN' };
         }
-        parentPin = newPin; lsSet('iptv.pin', parentPin); pinFailCount = 0; pinBlockedUntil = 0; return { ok: true, pinSet: !!parentPin };
+        // снятие PIN невозможно, если под защитой остались заблокированные группы — иначе они перестанут скрываться
+        if (!newPin && hasBlockedGroups()) return { ok: false, error: 'сначала разблокируйте все скрытые группы' };
+        parentPin = newPin; lsSet('iptv.pin', parentPin); pinFailCount = 0; pinBlockedUntil = 0;
+        if (!parentPin) pinUnlocked = false;
+        buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
+        // возвращаем полный снимок состояния (группы, каналы), чтобы render() на пульте получил валидные данные
+        return remoteState();
       }
-      if (name === 'unlock') { if (parentPin && verifyPin(cmd.pin)) { pinUnlocked = true; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); } return { ok: false, error: 'неверный PIN' }; }
-      if (name === 'lock') { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); }
+      if (name === 'unlock') {
+        if (!parentPin) return { ok: false, error: 'PIN не задан' };
+        if (verifyPin(cmd.pin)) { pinUnlocked = true; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return remoteState(); }
+        return { ok: false, error: 'неверный PIN' };
+      }
+      if (name === 'lock') { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return remoteState(); }
       if (name === 'clearEdits') { if (state.entry) lsSet('iptv.edit.' + state.entry.id, ''); return { ok: true }; }
   if (name === 'lastNote') { return { ok: true, note: remoteNote }; }
   if (name === 'saveFile') {
