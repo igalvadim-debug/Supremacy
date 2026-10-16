@@ -1,17 +1,16 @@
-/* eslint-disable */
-// @ts-nocheck /* Наследованный vanilla-код страницы файлов: строгая проверка типов отключена на уровне файла (см. MIGRATION.md). */
-(function () {
-'use strict';
-var ALLOWED = /\.(m3u8?|xml|xml\.gz)$/i;
-var drop = document.getElementById('drop'), pick = document.getElementById('pick');
-var uploads = document.getElementById('uploads'), list = document.getElementById('list');
-var queue = [], busy = false;
+import type { FilesResponse, UploadResponse, ServerFile } from './models';
+// Strikte Typisierung: siehe ../MIGRATION.md.
+import { requiredElement } from './dom';
+const ALLOWED = /\.(m3u8?|xml|xml\.gz)$/i;
+const drop = requiredElement('drop'), pick = requiredElement<HTMLInputElement>('pick');
+const uploads = requiredElement('uploads'), list = requiredElement('list');
+let queue: File[] = [], busy: boolean = false;
 /* Типизированный доступ к элементам форм (файлы/значение читаются после проверки тега). */
-function val(id) { var e = document.getElementById(id); return (e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement) ? e.value : ''; }
-function filesOf(e) { return (e && e instanceof HTMLInputElement && e.files) ? e.files : null; }
+function val(id: string): string { const e = document.getElementById(id); return (e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement) ? e.value : ''; }
+function filesOf(e: HTMLElement | null): FileList | null { return (e && e instanceof HTMLInputElement && e.files) ? e.files : null; }
 /* Сообщение о состоянии под списком файлов (создаётся при первом использовании). */
-function listMessage(text, isErr) {
-  var msg = document.getElementById('listmsg');
+function listMessage(text: string, isErr: boolean): void {
+  let msg = document.getElementById('listmsg');
   if (!msg) {
     msg = el('div', 'empty' + (isErr ? ' err' : ''));
     msg.id = 'listmsg';
@@ -22,51 +21,52 @@ function listMessage(text, isErr) {
 }
 
 /** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
-function fmtSize(n) {
-  if (n < 1024) return n + ' Б';
-  if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
-  return (n / 1048576).toFixed(1) + ' МБ';
+function fmtSize(n: number | undefined): string {
+  const size = Number(n);
+  if (size < 1024) return n + ' Б';
+  if (size < 1048576) return (size / 1024).toFixed(1) + ' КБ';
+  return (size / 1048576).toFixed(1) + ' МБ';
 }
 /** Formats a Unix timestamp in milliseconds as a Russian local date/time, returning an empty string for a falsy timestamp. */
-function fmtDate(ms) { return ms ? new Date(ms).toLocaleString('ru-RU') : ''; }
-function el(tag, cls, text) {
-  var e = document.createElement(tag);
+function fmtDate(ms: number): string { return ms ? new Date(ms).toLocaleString('ru-RU') : ''; }
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
 }
 
 /** Fetches and renders native files with download/delete actions; request, JSON, or rendering errors become a connection message. */
-function refresh() {
-  fetch('/api/files', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (data) {
+function refresh(): void {
+  fetch('/api/files', { cache: 'no-store' }).then(function (r: Response): Promise<FilesResponse> { return r.json() as Promise<FilesResponse>; }).then(function (data: FilesResponse): void {
     list.textContent = '';
     if (!data.files.length) { list.appendChild(el('div', 'empty', 'Файлов пока нет')); return; }
-    data.files.forEach(function (f) {
-      var row = el('div', 'item');
-      var name = el('div', 'name');
-      var a = el('a', '', f.name);
+    data.files.forEach(function (f: ServerFile): void {
+      const row = el('div', 'item');
+      const name = el('div', 'name');
+      const a = el('a', '', f.name);
       a.href = '/files/' + encodeURIComponent(f.name);
       name.appendChild(a);
       row.appendChild(name);
       row.appendChild(el('div', 'meta', fmtSize(f.size) + ' · ' + fmtDate(f.modified)));
-      var del = el('button', '', 'Удалить');
-      del.onclick = function () {
+      const del = el('button', '', 'Удалить');
+      del.onclick = function (): void {
         if (!window.confirm('Удалить файл «' + f.name + '»?')) return;
         // обновляем список только после успешного удаления; ошибку — показываем явно
         fetch('/api/files?name=' + encodeURIComponent(f.name), { method: 'DELETE' })
-          .then(function (response) {
+          .then(function (response: Response): void {
             if (!response.ok) {
               listMessage('Не удалось удалить «' + f.name + '»: HTTP ' + response.status, true);
               return;
             }
             refresh();
           })
-          .catch(function () { listMessage('Не удалось удалить «' + f.name + '»: нет связи с устройством', true); });
+          .catch(function (): void { listMessage('Не удалось удалить «' + f.name + '»: нет связи с устройством', true); });
       };
       row.appendChild(del);
       list.appendChild(row);
     });
-  }).catch(function () {
+  }).catch(function (): void {
     list.textContent = '';
     list.appendChild(el('div', 'empty err', 'Нет связи с устройством. Приложение должно быть открыто, сервер включён.'));
   });
@@ -77,19 +77,20 @@ function refresh() {
  * Accepts .m3u, .m3u8, .xml, and .xml.gz names, case-insensitively. Rejected filenames, HTTP/API failures,
  * and network errors update the upload row and advance the queue; success requires HTTP 200 and a truthy ok.
  */
-function next() {
+function next(): void {
   if (busy || !queue.length) return;
   busy = true;
-  var file = queue.shift();
-  var row = el('div', 'item');
-  var name = el('div', 'name', file.name);
-  var bar = el('div', 'bar'), fill = el('b');
+  // The nonempty queue was checked above; no callback runs before shift.
+  const file = queue.shift()!;
+  const row = el('div', 'item');
+  const name = el('div', 'name', file.name);
+  const bar = el('div', 'bar'), fill = el('b');
   bar.appendChild(fill);
-  var state = el('div', 'meta', '0%');
+  const state = el('div', 'meta', '0%');
   row.appendChild(name); row.appendChild(bar); row.appendChild(state);
   uploads.insertBefore(row, uploads.firstChild);
 
-  function done(ok, msg) {
+  function done(ok: boolean, msg: string): void {
     state.textContent = msg;
     state.className = 'meta ' + (ok ? 'ok' : 'err');
     if (ok) fill.style.width = '100%';
@@ -98,40 +99,40 @@ function next() {
     next();
   }
   if (!ALLOWED.test(file.name)) { done(false, 'Допустимы .m3u, .m3u8, .xml, .xml.gz'); return; }
-  var xhr = new XMLHttpRequest();
+  const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/upload?name=' + encodeURIComponent(file.name));
-  xhr.upload.onprogress = function (e) {
+  xhr.upload.onprogress = function (e: ProgressEvent<EventTarget>): void {
     if (!e.lengthComputable) return;
-    var p = Math.round(e.loaded / e.total * 100);
+    const p = Math.round(e.loaded / e.total * 100);
     fill.style.width = p + '%';
     state.textContent = p + '%';
   };
-  xhr.onload = function () {
-    var r = {};
-    try { r = JSON.parse(xhr.responseText); } catch (e) { /* не JSON */ }
+  xhr.onload = function (): void {
+    let r: UploadResponse = {};
+    try { r = JSON.parse(xhr.responseText) as UploadResponse; } catch (e) { /* не JSON */ }
     if (xhr.status === 200 && r.ok) done(true, 'Готово · ' + fmtSize(r.size));
     else done(false, r.error || ('Ошибка ' + xhr.status));
   };
-  xhr.onerror = function () { done(false, 'Обрыв связи'); };
+  xhr.onerror = function (): void { done(false, 'Обрыв связи'); };
   xhr.timeout = 60000; // конечный таймаут: зависший ответ не блокирует очередь
-  xhr.ontimeout = function () { done(false, 'Таймаут загрузки'); };
+  xhr.ontimeout = function (): void { done(false, 'Таймаут загрузки'); };
   xhr.send(file);
 }
 /** Appends selected files to the upload queue and starts processing if idle. */
-function add(files) {
-  for (var i = 0; i < files.length; i++) queue.push(files[i]);
+function add(files: FileList): void {
+  for (let i = 0; i < files.length; i++) queue.push(files[i]);
   next();
 }
 
-pick.onchange = function () { add(pick.files); pick.value = ''; };
-['dragenter', 'dragover'].forEach(function (n) {
-  drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('over'); });
+// #pick is a static input[type=file], whose files list is non-null.
+pick.onchange = function (): void { add(pick.files!); pick.value = ''; };
+['dragenter', 'dragover'].forEach(function (n: string): void {
+  drop.addEventListener(n, function (e: Event): void { e.preventDefault(); drop.classList.add('over'); });
 });
-['dragleave', 'drop'].forEach(function (n) {
-  drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+['dragleave', 'drop'].forEach(function (n: string): void {
+  drop.addEventListener(n, function (e: Event): void { e.preventDefault(); drop.classList.remove('over'); });
 });
-drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files); });
+drop.addEventListener('drop', function (e: DragEvent): void { if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files); });
 
 refresh();
 setInterval(refresh, 5000);
-})();

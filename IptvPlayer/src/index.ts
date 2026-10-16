@@ -1,17 +1,19 @@
-/* eslint-disable */
-// @ts-nocheck /* Наследованный vanilla-код: строгая проверка типов отключена на уровне файла. */
-// Plan für die schrittweise Typisierung: siehe MIGRATION.md; der Build (vite build) läuft unverändert.
-(function () {
-'use strict';
+import type Hls from 'hls.js';
+import type { HlsConfig, Events, ErrorData } from 'hls.js';
+import type { AppPlugin } from '@capacitor/app';
+import type { IptvNativePlugin, IptvPlayerPlugin, NativePlayerEvent, CapacitorHttpType, EpgLookupResponse } from './plugins';
+import type { Channel, ChannelInput, Group, PlaylistSource, PlaylistIdentity, PlaylistEntry, PlaylistOptions, PlayerState, Settings, CatchupDefaults, EpgProgram, EpgState, ServerStatus, ServerFile, RemoteCommand, RemoteResponse, RemoteState, RemoteChannel, Point, Direction, RemoteKey, NavMetadata, NavElement } from './models';
+// Strikte Typisierung: siehe ../MIGRATION.md.
+import { requiredElement } from './dom';
 
 /* ================= Константы ================= */
-var DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-var LS_URL = 'iptv.playlistUrl', LS_LAST = 'iptv.lastChannel', LS_FAVS = 'iptv.favs', LS_GROUP = 'iptv.group';
-var LS_BUF = 'iptv.bufferMs', LS_AUTO = 'iptv.autoReload', LS_HOURS = 'iptv.reloadHours', LS_RELOADED = 'iptv.lastReload';
-var LS_ENTRY = 'iptv.entry', LS_SRV = 'iptv.serverOn', LS_PORT = 'iptv.serverPort', LS_EPG = 'iptv.epgOn', LS_EPGFILE = 'iptv.epgFile';
-var PAGE_SIZE = 300;
-var GROUP_ALL = '', GROUP_FAV = '\u0001', GROUP_NONE = '\u0002';
-var HTTP_HEADERS = {
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const LS_URL = 'iptv.playlistUrl', LS_LAST = 'iptv.lastChannel', LS_FAVS = 'iptv.favs', LS_GROUP = 'iptv.group';
+const LS_BUF = 'iptv.bufferMs', LS_AUTO = 'iptv.autoReload', LS_HOURS = 'iptv.reloadHours', LS_RELOADED = 'iptv.lastReload';
+const LS_ENTRY = 'iptv.entry', LS_SRV = 'iptv.serverOn', LS_PORT = 'iptv.serverPort', LS_EPG = 'iptv.epgOn', LS_EPGFILE = 'iptv.epgFile';
+const PAGE_SIZE = 300;
+const GROUP_ALL = '', GROUP_FAV = '\u0001', GROUP_NONE = '\u0002';
+const HTTP_HEADERS = {
   'User-Agent': DESKTOP_UA,
   'Referer': 'https://google.com',
   'Accept': '*/*',
@@ -19,216 +21,216 @@ var HTTP_HEADERS = {
 };
 
 /* ================= Элементы ================= */
-function $(id) { return document.getElementById(id); }
-var urlInput = $('urlInput'), loadBtn = $('loadBtn'), fileInput = $('fileInput'), searchInput = $('searchInput');
-var reloadBtn = $('reloadBtn'), settingsBtn = $('settingsBtn'), libBtn = $('libBtn');
-var countEl = $('count'), statusEl = $('status'), grid = $('grid'), gridPane = $('gridPane'), groupBar = $('groupBar');
-var videoBox = $('videoBox'), video = $('video');
-var videoMsg = $('videoMsg'), nowTitle = $('nowTitle'), nowGroup = $('nowGroup');
-var nowEpg = $('nowEpg'), nowEpgNow = $('nowEpgNow'), nowEpgNext = $('nowEpgNext'), nowEpgBar = $('nowEpgBar');
-var osd = $('osd'), osdNum = $('osdNum'), osdName = $('osdName'), osdGroup = $('osdGroup'), osdState = $('osdState');
-var osdEpg = $('osdEpg'), osdEpgNow = $('osdEpgNow'), osdEpgNext = $('osdEpgNext'), osdEpgBar = $('osdEpgBar');
-var guide = $('guide'), guideTitle = $('guideTitle'), guideList = $('guideList');
-var favsPanel = $('favs'), favsTitle = $('favsTitle'), favsList = $('favsList');
-var pinpadEl = $('pinpad'), pinTitle = $('pinTitle'), pinDots = $('pinDots'), pinGrid = $('pinGrid'), pinCancel = $('pinCancel');
-var settingsEl = $('settings'), bufRange = $('bufRange'), bufNum = $('bufNum'), bufVal = $('bufVal');
-var autoChk = $('autoChk'), hoursNum = $('hoursNum'), lastReloadEl = $('lastReload'), toastEl = $('toast');
-var epgChk = $('epgChk'), epgInfoEl = $('epgInfo'), srvChk = $('srvChk'), srvAddr = $('srvAddr'), autoStartChk = $('autoStartChk');
-var libraryEl = $('library'), libList = $('libList'), fileList = $('fileList'), srvBtn = $('srvBtn'), srvInfo = $('srvInfo');
+function $(id: string): NavElement { return requiredElement<NavElement>(id); }
+const urlInput = requiredElement<HTMLInputElement>('urlInput'), loadBtn = $('loadBtn'), fileInput = requiredElement<HTMLInputElement>('fileInput'), searchInput = requiredElement<HTMLInputElement>('searchInput');
+const reloadBtn = $('reloadBtn'), settingsBtn = $('settingsBtn'), libBtn = $('libBtn');
+const countEl = $('count'), statusEl = $('status'), grid = $('grid'), gridPane = $('gridPane'), groupBar = $('groupBar');
+const videoBox = $('videoBox'), video = requiredElement<HTMLVideoElement>('video');
+const videoMsg = $('videoMsg'), nowTitle = $('nowTitle'), nowGroup = $('nowGroup');
+const nowEpg = $('nowEpg'), nowEpgNow = $('nowEpgNow'), nowEpgNext = $('nowEpgNext'), nowEpgBar = $('nowEpgBar');
+const osd = $('osd'), osdNum = $('osdNum'), osdName = $('osdName'), osdGroup = $('osdGroup'), osdState = $('osdState');
+const osdEpg = $('osdEpg'), osdEpgNow = $('osdEpgNow'), osdEpgNext = $('osdEpgNext'), osdEpgBar = $('osdEpgBar');
+const guide = $('guide'), guideTitle = $('guideTitle'), guideList = $('guideList');
+const favsPanel = $('favs'), favsTitle = $('favsTitle'), favsList = $('favsList');
+const pinpadEl = $('pinpad'), pinTitle = $('pinTitle'), pinDots = $('pinDots'), pinGrid = $('pinGrid'), pinCancel = $('pinCancel');
+const settingsEl = $('settings'), bufRange = requiredElement<HTMLInputElement>('bufRange'), bufNum = requiredElement<HTMLInputElement>('bufNum'), bufVal = $('bufVal');
+const autoChk = requiredElement<HTMLInputElement>('autoChk'), hoursNum = requiredElement<HTMLInputElement>('hoursNum'), lastReloadEl = $('lastReload'), toastEl = $('toast');
+const epgChk = requiredElement<HTMLInputElement>('epgChk'), epgInfoEl = $('epgInfo'), srvChk = requiredElement<HTMLButtonElement>('srvChk'), srvAddr = $('srvAddr'), autoStartChk = requiredElement<HTMLInputElement>('autoStartChk');
+const libraryEl = $('library'), libList = $('libList'), fileList = $('fileList'), srvBtn = requiredElement<HTMLButtonElement>('srvBtn'), srvInfo = $('srvInfo');
 
 /* ================= Утилиты ================= */
 /** Reads a stored value, returning an empty string for missing keys or storage errors. */
-function lsGet(key) { try { return window.localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+function lsGet(key: string): string { try { return window.localStorage.getItem(key) || ''; } catch (e) { return ''; } }
 /** Stores a value, silently ignoring storage errors. */
-function lsSet(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { /* хранилище недоступно */ } }
+function lsSet(key: string, value: string): void { try { window.localStorage.setItem(key, value); } catch (e) { /* хранилище недоступно */ } }
 /** Parses a base-10 integer, uses def if parsing fails, and clamps to the inclusive min/max bounds. */
-function toInt(v, def, min, max) {
-  var n = parseInt(v, 10);
+function toInt(v: string | number, def: number, min: number, max: number): number {
+  let n = parseInt(String(v), 10);
   if (isNaN(n)) n = def;
   return Math.max(min, Math.min(max, n));
 }
-function mk(tag, cls, text) {
-  var e = document.createElement(tag);
+function mk<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] & NavMetadata {
+  const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
 }
-function setStatus(text, kind) { statusEl.textContent = text; statusEl.className = kind || ''; }
+function setStatus(text: string, kind?: string): void { statusEl.textContent = text; statusEl.className = kind || ''; }
 /** Returns the Russian noun form for a channel count. */
-function plural(n) {
-  var m10 = n % 10, m100 = n % 100;
+function plural(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return 'канал';
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'канала';
   return 'каналов';
 }
-function nativeHttp() {
+function nativeHttp(): CapacitorHttpType | null {
   return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp) || null;
 }
-function appPlugin() {
+function appPlugin(): AppPlugin | null {
   return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) || null;
 }
 // Собственный нативный плагин (файловый сервер, папка «Загрузки», EPG). В обычном браузере его нет.
-var nativeP;
+let nativeP: IptvNativePlugin | null | undefined;
 /** Returns the cached IptvNative bridge, or null if unavailable or registration throws. */
-function native() {
+function native(): IptvNativePlugin | null {
   if (nativeP !== undefined) return nativeP;
   nativeP = null;
   try {
-    var C = window.Capacitor;
+    const C = window.Capacitor;
     if (C) nativeP = (C.Plugins && C.Plugins.IptvNative) || (C.registerPlugin ? C.registerPlugin('IptvNative') : null);
   } catch (e) { nativeP = null; }
   return nativeP;
 }
-var nativePlayerP;
+let nativePlayerP: IptvPlayerPlugin | null | undefined;
 /** Returns the cached IptvPlayer bridge, or null if unavailable or registration throws. */
-function playerPlugin() {
+function playerPlugin(): IptvPlayerPlugin | null {
   if (nativePlayerP !== undefined) return nativePlayerP;
   nativePlayerP = null;
   try {
-    var C = window.Capacitor;
+    const C = window.Capacitor;
     if (C) nativePlayerP = (C.Plugins && C.Plugins.IptvPlayer) || (C.registerPlugin ? C.registerPlugin('IptvPlayer') : null);
   } catch (e) { nativePlayerP = null; }
   return nativePlayerP;
 }
-var toastTimer = null;
+let toastTimer: number | undefined = undefined;
 /** Shows a message for ms milliseconds; a missing or zero duration uses 2,200 ms. */
-function showToast(text, ms) {
+function showToast(text: string, ms?: number): void {
   toastEl.textContent = text;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2200);
+  toastTimer = window.setTimeout(function (): void { toastEl.classList.remove('show'); }, ms || 2200);
 }
-function isText(el) { return !!el && el.tagName === 'INPUT' && el.type === 'text'; }
+function isText<T extends Element>(el: T | null): el is T & HTMLInputElement { return !!el && el instanceof HTMLInputElement && el.type === 'text'; }
 /** Formats a Unix timestamp in milliseconds as a Russian hour/minute string in the local time zone. */
-function fmtTime(ms) { return new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+function fmtTime(ms: number): string { return new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
 /** Formats a Unix timestamp in milliseconds as a Russian day/month and time in the local time zone. */
-function fmtDateTime(ms) { return new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+function fmtDateTime(ms: number): string { return new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 /** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
-function fmtSize(n) {
+function fmtSize(n: number): string {
   if (n < 1024) return n + ' Б';
   if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
   return (n / 1048576).toFixed(1) + ' МБ';
 }
 /** Returns a URL hostname and final path segment, or the original input if URL parsing fails. */
-function niceUrlName(url) {
+function niceUrlName(url: string): string {
   try {
-    var u = new URL(url), last = u.pathname.split('/').filter(Boolean).pop() || '';
+    const u = new URL(url), last = u.pathname.split('/').filter(Boolean).pop() || '';
     return u.hostname + (last ? '/' + last : '');
   } catch (e) { return url; }
 }
-function errMsg(err) { return (err && err.message) ? err.message : String(err); }
+function errMsg(err: unknown): string { return (err && typeof err === 'object' && 'message' in err && err.message) ? String(err.message) : String(err); }
 
 /* ================= Настройки, избранное, EPG-состояние ================= */
-var settings = {
+const settings: Settings = {
   bufferMs: toInt(lsGet(LS_BUF), 1500, 0, 7000),
   autoReload: lsGet(LS_AUTO) !== '0',
   reloadHours: toInt(lsGet(LS_HOURS), 24, 1, 168)
 };
-var favs = new Set();
+const favs = new Set<string>();
 try {
-  var arr = JSON.parse(lsGet(LS_FAVS) || '[]');
-  if (Array.isArray(arr)) arr.forEach(function (u) { favs.add(String(u)); });
+  const arr: unknown = JSON.parse(lsGet(LS_FAVS) || '[]');
+  if (Array.isArray(arr)) (arr as unknown[]).forEach(function (u: unknown): void { favs.add(String(u)); });
 } catch (e) { /* повреждённые данные — начинаем с пустого списка */ }
-function saveFavs() { lsSet(LS_FAVS, JSON.stringify(Array.from(favs))); }
-function isFav(ch) { return favs.has(ch.url); }
+function saveFavs(): void { lsSet(LS_FAVS, JSON.stringify(Array.from(favs))); }
+function isFav(ch: Channel): boolean { return favs.has(ch.url); }
 
-var epg = { enabled: lsGet(LS_EPG) !== '0', file: lsGet(LS_EPGFILE), status: 'none', info: null, err: '', loading: false, pending: '', cache: new Map() };
-var headerEpgUrl = '';
-var headerCatchup = { mode: '', source: '', days: 0 };
-var srv = { running: false, port: 0, addresses: [] };
-var blockedGroups = new Set();
-try { (JSON.parse(lsGet('iptv.blocked') || '[]')).forEach(function (k) { blockedGroups.add(String(k)); }); } catch (e) { /* ignore */ }
-function saveBlocked() { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
-var parentPin = lsGet('iptv.pin') || '';
-var pinUnlocked = false;
+const epg: EpgState = { enabled: lsGet(LS_EPG) !== '0', file: lsGet(LS_EPGFILE), status: 'none', info: null, err: '', loading: false, pending: '', cache: new Map() };
+let headerEpgUrl: string = '';
+let headerCatchup: CatchupDefaults = { mode: '', source: '', days: 0 };
+let srv: ServerStatus = { running: false, port: 0, addresses: [] };
+const blockedGroups = new Set<string>();
+try { (JSON.parse(lsGet('iptv.blocked') || '[]') as unknown[]).forEach(function (k: unknown): void { blockedGroups.add(String(k)); }); } catch (e) { /* ignore */ }
+function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
+let parentPin: string = lsGet('iptv.pin') || '';
+let pinUnlocked: boolean = false;
 
 /* ================= Состояние ================= */
-var state = { channels: [], view: [], groups: [], group: lsGet(LS_GROUP), current: null, entry: null, mode: 'menu', renderCount: PAGE_SIZE };
-var cardMap = new Map();
-var focusedEl = null, osdTimer = null, searchTimer = null, epgTimer = null, epgReloadTimer = null, libTimer = null;
-var hls = null, playToken = 0, nativeErrHandler = null, playFailed = false, userPaused = false, loading = false;
-var gating = false, hasPlayed = false, swipedAt = 0, lpFired = false, lastAutoTry = 0, filesSig = '';
+const state: PlayerState = { channels: [], view: [], groups: [], group: lsGet(LS_GROUP), current: null, entry: null, mode: 'menu', renderCount: PAGE_SIZE };
+const cardMap = new Map<Channel, NavElement>();
+let focusedEl: NavElement | null = null, osdTimer: number | undefined = undefined, searchTimer: number | undefined = undefined, epgTimer: number | undefined = undefined, epgReloadTimer: number | undefined = undefined, libTimer: number | undefined = undefined;
+let hls: Hls | null = null, playToken: number = 0, nativeErrHandler: (() => void) | null = null, playFailed: boolean = false, userPaused: boolean = false, loading: boolean = false;
+let gating: boolean = false, hasPlayed: boolean = false, swipedAt: number = 0, lpFired: boolean = false, lastAutoTry: number = 0, filesSig: string = '';
 
 /* ================= Библиотека плейлистов (IndexedDB) ================= */
-var libDb = null;
+let libDb: IDBDatabase | null = null;
 /**
  * Opens or reuses the playlist database, creating its store on the first open.
  * @returns A promise for the database; rejects when IndexedDB is unavailable or opening fails.
  */
-function dbOpen() {
-  return new Promise(function (resolve, reject) {
+function dbOpen(): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>(function (resolve: (value: IDBDatabase | PromiseLike<IDBDatabase>) => void, reject: (reason?: unknown) => void): void {
     if (libDb) { resolve(libDb); return; }
     if (!window.indexedDB) { reject(new Error('IndexedDB недоступна')); return; }
-    var rq = window.indexedDB.open('iptv-lib', 1);
-    rq.onupgradeneeded = function () { rq.result.createObjectStore('playlists', { keyPath: 'id' }); };
-    rq.onsuccess = function () { libDb = rq.result; resolve(libDb); };
-    rq.onerror = function () { reject(rq.error); };
+    const rq = window.indexedDB.open('iptv-lib', 1);
+    rq.onupgradeneeded = function (): void { rq.result.createObjectStore('playlists', { keyPath: 'id' }); };
+    rq.onsuccess = function (): void { libDb = rq.result; resolve(libDb); };
+    rq.onerror = function (): void { reject(rq.error); };
   });
 }
 /**
  * Runs fn with the playlist store in the requested IndexedDB transaction mode.
- * @returns A promise for the returned request's result after commit, or undefined if fn returns no request.
+ * @returns A promise for the returned request's result after commit.
  *   Database-open, transaction, and callback errors reject the promise.
  */
-function dbTx(mode, fn) {
-  return dbOpen().then(function (db) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction('playlists', mode);
-      var req = fn(tx.objectStore('playlists'));
-      tx.oncomplete = function () { resolve(req ? req.result : undefined); };
-      tx.onerror = tx.onabort = function () { reject(tx.error); };
+function dbTx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return dbOpen().then(function (db: IDBDatabase): Promise<T> {
+    return new Promise<T>(function (resolve: (value: T | PromiseLike<T>) => void, reject: (reason?: unknown) => void): void {
+      const tx = db.transaction('playlists', mode);
+      const req = fn(tx.objectStore('playlists'));
+      tx.oncomplete = function (): void { resolve(req.result); };
+      tx.onerror = tx.onabort = function (): void { reject(tx.error); };
     });
   });
 }
 /** Stores or replaces a playlist by id; returns a promise for its key and propagates database errors. */
-function libPut(entry) { return dbTx('readwrite', function (st) { return st.put(entry); }); }
-/** Returns a promise for the playlist with this id, or undefined if absent; database errors propagate. */
-function libGet(id) { return dbTx('readonly', function (st) { return st.get(id); }); }
+function libPut(entry: PlaylistEntry): Promise<IDBValidKey> { return dbTx('readwrite', function (st: IDBObjectStore): IDBRequest<IDBValidKey> { return st.put(entry); }); }
+/** IndexedDB stores PlaylistEntry records via libPut. The DOM API erases that schema on reads. */
+function libGet(id: string): Promise<PlaylistEntry | undefined> { return dbTx<PlaylistEntry | undefined>('readonly', function (st: IDBObjectStore): IDBRequest<PlaylistEntry | undefined> { return st.get(id) as IDBRequest<PlaylistEntry | undefined>; }); }
 /** Deletes a playlist by id; returns a promise for transaction completion and propagates database errors. */
-function libDel(id) { return dbTx('readwrite', function (st) { return st['delete'](id); }); }
+function libDel(id: string): Promise<undefined> { return dbTx('readwrite', function (st: IDBObjectStore): IDBRequest<undefined> { return st['delete'](id); }); }
 /** Returns a promise for all saved playlists; database errors propagate. */
-function libAll() { return dbTx('readonly', function (st) { return st.getAll(); }); }
+function libAll(): Promise<PlaylistEntry[]> { return dbTx<PlaylistEntry[]>('readonly', function (st: IDBObjectStore): IDBRequest<PlaylistEntry[]> { return st.getAll() as IDBRequest<PlaylistEntry[]>; }); }
 
 /**
  * Starts saving a playlist copy under its source kind and key, without waiting for completion.
  * The source key is a URL or filename; count is the parsed channel count. Save failures are ignored.
  */
-function saveEntry(src, name, text, count) {
-  var id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
-  var entry = { id: id, kind: src.kind, name: name, url: src.kind === 'url' ? src.key : '', fileName: src.kind === 'file' ? src.key : '',
+function saveEntry(src: PlaylistSource, name: string, text: string, count: number): void {
+  const id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
+  const entry: PlaylistEntry = { id: id, kind: src.kind, name: name, url: src.kind === 'url' ? src.key : '', fileName: src.kind === 'file' ? src.key : '',
     text: text, count: count, savedAt: Date.now() };
-  libPut(entry).catch(function () { /* копия не сохранилась — работаем без неё */ });
+  libPut(entry).catch(function (): void { /* копия не сохранилась — работаем без неё */ });
 }
 
 /* ================= Парсер M3U ================= */
 /** Splits EXTINF content at the first comma outside double quotes; a missing comma yields an empty title. */
-function splitExtInf(body) {
-  var inQuote = false;
-  for (var i = 0; i < body.length; i++) {
-    var ch = body.charAt(i);
+function splitExtInf(body: string): { head: string; title: string } {
+  let inQuote = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body.charAt(i);
     if (ch === '"') inQuote = !inQuote;
     else if (ch === ',' && !inQuote) return { head: body.slice(0, i), title: body.slice(i + 1).trim() };
   }
   return { head: body, title: '' };
 }
 /** Extracts double-quoted attributes with lowercase keys and trimmed values; later duplicates win. */
-function parseAttrs(head) {
-  var attrs = {}, re = /([A-Za-z0-9_-]+)="([^"]*)"/g, m;
+function parseAttrs(head: string): Record<string, string> {
+  let attrs: Record<string, string> = {}, re = /([A-Za-z0-9_-]+)="([^"]*)"/g, m: RegExpExecArray | null;
   while ((m = re.exec(head)) !== null) attrs[m[1].toLowerCase()] = m[2].trim();
   return attrs;
 }
 /** Derives a channel name from the decoded URL filename or hostname, returning the input on parse errors. */
-function guessName(url) {
+function guessName(url: string): string {
   try {
-    var u = new URL(url);
-    var last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+    const u = new URL(url);
+    let last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
     last = last.replace(/\.(m3u8?|ts|mp4|mkv|avi)$/i, '');
     return last || u.hostname;
   } catch (e) { return url; }
 }
 /** Creates channel data with search keys, falling back to playlist header catch-up settings for falsy values. */
-function makeChannel(o) {
-  var name = o.name || 'Без названия', group = o.group || '';
+function makeChannel(o: ChannelInput): Channel {
+  const name = o.name || 'Без названия', group = o.group || '';
   return { name: name, url: o.url, logo: o.logo || '', group: group, tvgId: o.tvgId || '', tvgName: o.tvgName || '',
     catchup: o.catchup || headerCatchup.mode || '', catchupSource: o.catchupSource || headerCatchup.source || '', catchupDays: o.catchupDays || headerCatchup.days || 0,
     nameLower: name.toLowerCase(), groupLower: group.toLowerCase() };
@@ -238,16 +240,16 @@ function makeChannel(o) {
  * Resets header catch-up defaults and updates the shared EPG URL when the header supplies an HTTP(S) URL.
  * Unsupported URL schemes are skipped; missing metadata uses channel defaults.
  */
-function parsePlaylist(text) {
-  var lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
-  var out = [], pending = null, extGrp = '';
+function parsePlaylist(text: string): Channel[] {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
+  let out: Channel[] = [], pending: Partial<Channel> | null = null, extGrp = '';
   headerCatchup = { mode: '', source: '', days: 0 };
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].trim();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (!line) continue;
     if (line.indexOf('#EXTM3U') === 0) {
-      var ha = parseAttrs(line);
-      var tv = ha['url-tvg'] || ha['x-tvg-url'] || ha['tvg-url'] || '';
+      const ha = parseAttrs(line);
+      let tv = ha['url-tvg'] || ha['x-tvg-url'] || ha['tvg-url'] || '';
       tv = tv.split(',')[0].trim();
       if (/^https?:\/\//i.test(tv)) headerEpgUrl = tv;
       if (ha['catchup']) headerCatchup.mode = ha['catchup'];
@@ -256,9 +258,9 @@ function parsePlaylist(text) {
       continue;
     }
     if (line.indexOf('#EXTINF') === 0) {
-      var colon = line.indexOf(':');
-      var parts = splitExtInf(colon >= 0 ? line.slice(colon + 1) : '');
-      var attrs = parseAttrs(parts.head);
+      const colon = line.indexOf(':');
+      const parts = splitExtInf(colon >= 0 ? line.slice(colon + 1) : '');
+      const attrs = parseAttrs(parts.head);
       pending = {
         name: parts.title || attrs['tvg-name'] || '',
         logo: attrs['tvg-logo'] || '',
@@ -277,7 +279,8 @@ function parsePlaylist(text) {
     if (pending) {
       if (!pending.group) pending.group = extGrp;
       pending.url = line;
-      out.push(makeChannel(pending));
+      // EXTINF metadata acquires its required URL immediately above.
+      out.push(makeChannel(pending as ChannelInput));
     } else {
       out.push(makeChannel({ name: guessName(line), url: line, group: extGrp }));
     }
@@ -292,24 +295,24 @@ function parsePlaylist(text) {
  * @returns A promise for the response text; non-string native data is JSON-serialized.
  * @throws If the HTTP status is unsuccessful; request, response-reading, and serialization errors also propagate.
  */
-async function fetchPlaylistText(url) {
-  var http = nativeHttp();
+async function fetchPlaylistText(url: string): Promise<string> {
+  const http = nativeHttp();
   if (window.Capacitor && http) {
     // Android: нативный HTTP — без CORS, с браузерными заголовками
-    var res = await http.get({ url: url, headers: HTTP_HEADERS, responseType: 'text', connectTimeout: 20000, readTimeout: 60000 });
+    const res = await http.get({ url: url, headers: HTTP_HEADERS, responseType: 'text', connectTimeout: 20000, readTimeout: 60000 });
     if (res.status < 200 || res.status >= 300) throw new Error('сервер ответил HTTP ' + res.status);
     return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   }
   // ПК / обычный браузер: стандартный fetch
-  var r = await fetch(url, { cache: 'no-store' });
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error('сервер ответил HTTP ' + r.status);
   return await r.text();
 }
 /** Saves the current reload timestamp in milliseconds and refreshes its settings display. */
-function markReloaded() { lsSet(LS_RELOADED, String(Date.now())); updateLastReload(); }
+function markReloaded(): void { lsSet(LS_RELOADED, String(Date.now())); updateLastReload(); }
 /** Formats a load error, substituting a browser CORS/network hint for TypeError when native HTTP is absent. */
-function netErrText(err) {
-  var msg = errMsg(err);
+function netErrText(err: unknown): string {
+  let msg = errMsg(err);
   if (err instanceof TypeError && !nativeHttp()) msg = 'браузер заблокировал запрос (CORS или нет сети). В Android-приложении запрос идёт нативно.';
   return msg;
 }
@@ -319,16 +322,16 @@ function netErrText(err) {
  * On fetch or apply failure, tries cached.text if supplied; failures are displayed as status messages.
  * Successful network loads save the playlist and update its reload timestamp.
  */
-async function loadFromUrl(cached) {
+async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
   if (loading) return;
-  var url = urlInput.value.trim();
+  const url = urlInput.value.trim();
   if (!url) { setStatus('Введите ссылку на плейлист.', 'error'); return; }
   if (!/^https?:\/\//i.test(url)) { setStatus('Ссылка должна начинаться с http:// или https://', 'error'); return; }
   lsSet(LS_URL, url);
   loading = true;
   setStatus('Загрузка плейлиста…');
   try {
-    var text = await fetchPlaylistText(url);
+    const text = await fetchPlaylistText(url);
     applyPlaylist(text, 'ссылка', { kind: 'url', key: url }, {});
     markReloaded();
   } catch (err) {
@@ -350,9 +353,9 @@ async function loadFromUrl(cached) {
  * Errors become status messages. A truthy manual flag adds feedback and requests a forced EPG reload
  * following the load attempt; an active load or missing entry returns early.
  */
-async function reloadPlaylist(manual) {
+async function reloadPlaylist(manual: boolean): Promise<void> {
   if (loading) { if (manual) showToast('Загрузка уже идёт…'); return; }
-  var ent = state.entry;
+  const ent = state.entry;
   if (!ent) {
     if (manual) { setStatus('Сначала откройте плейлист.', 'warn'); showToast('Нет открытого плейлиста'); }
     return;
@@ -360,11 +363,11 @@ async function reloadPlaylist(manual) {
   loading = true;
   if (manual) { setStatus('Обновление плейлиста…'); showToast('Обновление плейлиста…'); }
   try {
-    var text, src;
+    let text: string, src: PlaylistSource;
     if (ent.kind === 'file') {
-      var n = native();
+      const n = native();
       if (!n) throw new Error('обновление файла доступно только в приложении');
-      var r = await n.readFile({ name: ent.fileName });
+      const r = await n.readFile({ name: ent.fileName });
       text = r.text;
       src = { kind: 'file', key: ent.fileName };
     } else {
@@ -384,10 +387,10 @@ async function reloadPlaylist(manual) {
   if (manual) epgReload(true);
 }
 /** Reloads a URL playlist when its configured interval has elapsed, spacing automatic attempts by at least ten minutes. */
-function autoTick() {
+function autoTick(): void {
   if (!settings.autoReload || loading) return;
   if (!state.entry || state.entry.kind !== 'url') return;
-  var last = parseInt(lsGet(LS_RELOADED), 10) || 0, now = Date.now();
+  const last = parseInt(lsGet(LS_RELOADED), 10) || 0, now = Date.now();
   if (now - last >= settings.reloadHours * 3600000 && now - lastAutoTry >= 600000) {
     lastAutoTry = now;
     reloadPlaylist(false);
@@ -395,13 +398,13 @@ function autoTick() {
 }
 
 /** Reads the first selected file as UTF-8 and applies it as a playlist, displaying read or apply errors in the UI. */
-function loadFromFile() {
-  var file = fileInput.files && fileInput.files[0];
+function loadFromFile(): void {
+  const file = fileInput.files && fileInput.files[0];
   if (!file) return;
   setStatus('Чтение файла…');
-  var reader = new FileReader();
-  reader.onerror = function () { setStatus('Не удалось прочитать файл.', 'error'); };
-  reader.onload = function () {
+  const reader = new FileReader();
+  reader.onerror = function (): void { setStatus('Не удалось прочитать файл.', 'error'); };
+  reader.onload = function (): void {
     try { applyPlaylist(String(reader.result || ''), file.name, { kind: 'file', key: file.name }, {}); }
     catch (err) { setStatus('Ошибка: ' + errMsg(err), 'error'); }
     try { fileInput.value = ''; } catch (e) { /* ignore */ }
@@ -418,14 +421,14 @@ function loadFromFile() {
  *   nosave skips saving a library copy. Both default to false.
  * @throws If text is empty, looks like HTML, has no HTTP(S) channels, or is an HLS manifest without a source URL.
  */
-function applyPlaylist(text, sourceName, src, opts) {
+function applyPlaylist(text: string, sourceName: string, src: PlaylistSource | null, opts: PlaylistOptions): void {
   opts = opts || {};
-  var trimmed = text.replace(/^\uFEFF/, '').trim();
+  const trimmed = text.replace(/^\uFEFF/, '').trim();
   if (!trimmed) throw new Error('плейлист пуст');
   if (/<html[\s>]/i.test(trimmed.slice(0, 500))) throw new Error('сервер вернул HTML-страницу вместо плейлиста');
-  var sourceUrl = src && src.kind === 'url' ? src.key : '';
+  const sourceUrl = src && src.kind === 'url' ? src.key : '';
   headerEpgUrl = '';
-  var channels;
+  let channels: Channel[];
   if (/#EXT-X-(STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE)/.test(trimmed)) {
     if (!sourceUrl) throw new Error('это манифест одного HLS-потока, а не список каналов — загрузите его по ссылке');
     channels = [makeChannel({ name: 'Поток HLS', url: sourceUrl, group: 'Прямая ссылка' })];
@@ -435,30 +438,30 @@ function applyPlaylist(text, sourceName, src, opts) {
   if (!channels.length) throw new Error('в плейлисте нет каналов с http/https-ссылками');
 
   if (src) {
-    var id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
+    const id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
     state.entry = { id: id, kind: src.kind, url: sourceUrl, fileName: src.kind === 'file' ? src.key : '' };
     lsSet(LS_ENTRY, id);
     if (!opts.nosave) saveEntry(src, src.kind === 'url' ? niceUrlName(src.key) : src.key, trimmed, channels.length);
   }
 
-  var prevUrl = state.current ? state.current.url : '';
+  const prevUrl = state.current ? state.current.url : '';
   state.channels = channels;
   epg.cache.clear();
   buildGroups();
-  if (state.group && state.group !== GROUP_FAV && !state.groups.some(function (g) { return g.key === state.group; })) {
+  if (state.group && state.group !== GROUP_FAV && !state.groups.some(function (g: Group): boolean { return g.key === state.group; })) {
     state.group = GROUP_ALL; lsSet(LS_GROUP, '');
   }
   if (!opts.keep) { searchInput.value = ''; state.renderCount = PAGE_SIZE; }
   computeView();
   if (prevUrl) {
-    var found = channels.find(function (c) { return c.url === prevUrl; });
+    const found = channels.find(function (c: Channel): boolean { return c.url === prevUrl; });
     if (found) state.current = found;
   }
 
-  var lastIdx = -1;
+  let lastIdx = -1;
   if (!opts.keep) {
-    var lastUrl = lsGet(LS_LAST);
-    if (lastUrl) { for (var i = 0; i < state.view.length; i++) { if (state.view[i].url === lastUrl) { lastIdx = i; break; } } }
+    const lastUrl = lsGet(LS_LAST);
+    if (lastUrl) { for (let i = 0; i < state.view.length; i++) { if (state.view[i].url === lastUrl) { lastIdx = i; break; } } }
     if (lastIdx >= state.renderCount) state.renderCount = lastIdx + PAGE_SIZE;
   } else if (state.renderCount < state.view.length && state.renderCount < PAGE_SIZE) {
     state.renderCount = PAGE_SIZE;
@@ -467,7 +470,7 @@ function applyPlaylist(text, sourceName, src, opts) {
   renderGrid(!!opts.keep);
   setStatus((opts.keep ? 'Обновлено: ' : 'Загружено: ') + channels.length + ' ' + plural(channels.length) + ' · ' + sourceName, 'ok');
   if (!opts.keep && state.mode === 'menu') {
-    var target = cardMap.get(state.view[lastIdx >= 0 ? lastIdx : 0]);
+    const target = cardMap.get(state.view[lastIdx >= 0 ? lastIdx : 0]);
     if (target) setFocus(target);
   }
   updateLastReload();
@@ -475,9 +478,9 @@ function applyPlaylist(text, sourceName, src, opts) {
 }
 
 /* ================= Окно «Плейлисты» ================= */
-function libraryOpen() { return libraryEl.classList.contains('open'); }
+function libraryOpen(): boolean { return libraryEl.classList.contains('open'); }
 /** Opens the playlist library, loads saved entries and native files, and starts polling files every three seconds. */
-async function openLibrary() {
+async function openLibrary(): Promise<void> {
   if (settingsOpen()) closeSettings();
   libraryEl.classList.add('open');
   filesSig = '';
@@ -485,10 +488,10 @@ async function openLibrary() {
   await renderLibrary();
   await renderFiles(true);
   clearInterval(libTimer);
-  libTimer = setInterval(function () { renderFiles(false); }, 3000);
+  libTimer = window.setInterval(function (): void { renderFiles(false); }, 3000);
   setFocus(srvBtn, false);
 }
-function closeLibrary() {
+function closeLibrary(): void {
   if (!libraryOpen()) return;
   libraryEl.classList.remove('open');
   clearInterval(libTimer);
@@ -499,15 +502,15 @@ function closeLibrary() {
  * Assigns a button action that requires a second activation within three seconds.
  * The first activation shows a confirmation label; timeout restores label. Activation does not catch synchronous action errors.
  */
-function twoStep(btn, label, action) {
+function twoStep(btn: NavElement, label: string, action: () => void): void {
   btn._armed = false;
-  btn._act = function () {
+  btn._act = function (): void {
     if (!btn._armed) {
       btn._armed = true;
       btn.textContent = 'Удалить?';
       btn.classList.add('armed');
       clearTimeout(btn._t);
-      btn._t = setTimeout(function () { btn._armed = false; btn.textContent = label; btn.classList.remove('armed'); }, 3000);
+      btn._t = window.setTimeout(function (): void { btn._armed = false; btn.textContent = label; btn.classList.remove('armed'); }, 3000);
     } else {
       clearTimeout(btn._t);
       action();
@@ -516,25 +519,25 @@ function twoStep(btn, label, action) {
 }
 
 /** Renders saved playlists newest first, treating database read failures as an empty library. */
-async function renderLibrary() {
-  var entries = [];
+async function renderLibrary(): Promise<void> {
+  let entries: PlaylistEntry[] = [];
   try { entries = await libAll(); } catch (e) { entries = []; }
-  entries.sort(function (a, b) { return b.savedAt - a.savedAt; });
+  entries.sort(function (a: PlaylistEntry, b: PlaylistEntry): number { return b.savedAt - a.savedAt; });
   libList.textContent = '';
   if (!entries.length) {
     libList.appendChild(mk('div', 'note', 'Пока пусто. Плейлисты, открытые по ссылке или из файла, сохраняются здесь автоматически.'));
   }
-  entries.forEach(function (e) {
-    var row = mk('div', 'lrow' + (state.entry && state.entry.id === e.id ? ' current' : ''));
-    var main = mk('div', 'lmain');
+  entries.forEach(function (e: PlaylistEntry): void {
+    const row = mk('div', 'lrow' + (state.entry && state.entry.id === e.id ? ' current' : ''));
+    const main = mk('div', 'lmain');
     main.setAttribute('data-nav', '1');
     main.appendChild(mk('div', 'lname', e.name));
     main.appendChild(mk('div', 'lmeta', (e.kind === 'url' ? 'ссылка' : 'файл') + ' · ' + e.count + ' ' + plural(e.count) + ' · ' + fmtDateTime(e.savedAt)));
-    main._act = function () { openEntry(e.id, false); };
-    var del = mk('button', '', '\u2715');
+    main._act = function (): void { openEntry(e.id, false); };
+    const del = mk('button', '', '\u2715');
     del.setAttribute('data-nav', '1');
-    twoStep(del, '\u2715', function () {
-      libDel(e.id).then(function () {
+    twoStep(del, '\u2715', function (): void {
+      libDel(e.id).then(function (): void {
         if (state.entry && state.entry.id === e.id) { state.entry = null; lsSet(LS_ENTRY, ''); }
         showToast('Плейлист удалён');
         renderLibrary();
@@ -551,38 +554,38 @@ async function renderLibrary() {
  * Renders native downloads and EPG selection, treating listing errors as an empty file list.
  * A truthy force bypasses the unchanged-list check; without a native bridge, shows an availability message.
  */
-async function renderFiles(force) {
-  var n = native();
+async function renderFiles(force: boolean): Promise<void> {
+  const n = native();
   if (!n) {
     fileList.textContent = '';
     fileList.appendChild(mk('div', 'note', 'Файловый сервер и папка «Загрузки» доступны только в Android-приложении.'));
     return;
   }
-  var files = [];
+  let files: ServerFile[] = [];
   try { files = (await n.listFiles()).files || []; } catch (e) { files = []; }
-  var sig = JSON.stringify(files.map(function (f) { return [f.name, f.size, f.modified]; })) + '|' + epg.file;
+  const sig = JSON.stringify(files.map(function (f: ServerFile): (string | number)[] { return [f.name, f.size, f.modified]; })) + '|' + epg.file;
   if (!force && sig === filesSig) return;
   filesSig = sig;
   fileList.textContent = '';
   if (!files.length) {
     fileList.appendChild(mk('div', 'note', 'Файлов пока нет. Загрузите их через браузер, когда сервер включён.'));
   }
-  files.forEach(function (f) {
-    var isEpg = /\.xml(\.gz)?$/i.test(f.name);
-    var row = mk('div', 'lrow' + (isEpg && epg.file === f.name ? ' current' : ''));
-    var main = mk('div', 'lmain');
+  files.forEach(function (f: ServerFile): void {
+    const isEpg = /\.xml(\.gz)?$/i.test(f.name);
+    const row = mk('div', 'lrow' + (isEpg && epg.file === f.name ? ' current' : ''));
+    const main = mk('div', 'lmain');
     main.setAttribute('data-nav', '1');
     main.appendChild(mk('div', 'lname', f.name));
     main.appendChild(mk('div', 'lmeta', (isEpg ? 'телепрограмма (нажмите, чтобы использовать)' : 'плейлист (нажмите, чтобы открыть)') + ' · ' + fmtSize(f.size) + ' · ' + fmtDateTime(f.modified)));
-    main._act = function () { if (isEpg) setEpgFile(f.name); else openDownloadFile(f.name); };
-    var del = mk('button', '', '\u2715');
+    main._act = function (): void { if (isEpg) setEpgFile(f.name); else openDownloadFile(f.name); };
+    const del = mk('button', '', '\u2715');
     del.setAttribute('data-nav', '1');
-    twoStep(del, '\u2715', function () {
-      n.deleteFile({ name: f.name }).then(function () {
+    twoStep(del, '\u2715', function (): void {
+      n.deleteFile({ name: f.name }).then(function (): void {
         if (epg.file === f.name) { epg.file = ''; lsSet(LS_EPGFILE, ''); epgReload(true); }
         showToast('Файл удалён');
         renderFiles(true);
-      }, function (e) { showToast('Не удалось удалить: ' + errMsg(e)); });
+      }, function (e: unknown): void { showToast('Не удалось удалить: ' + errMsg(e)); });
     });
     row.appendChild(main);
     row.appendChild(del);
@@ -596,12 +599,12 @@ async function renderFiles(force) {
  * URL entries try the network before their saved copy. Read/apply failures are reported in the UI.
  * A truthy startup leaves the library open rather than closing it before loading.
  */
-async function openEntry(id, startup) {
-  var e = null;
+async function openEntry(id: string, startup: boolean): Promise<void> {
+  let e: PlaylistEntry | undefined | null = null;
   try { e = await libGet(id); } catch (x) { e = null; }
   if (!e) { showToast('Плейлист не найден'); return; }
   if (!startup) closeLibrary();
-  var savedEdit = lsGet('iptv.edit.' + id);
+  const savedEdit = lsGet('iptv.edit.' + id);
   if (savedEdit) {
     try { applyPlaylist(savedEdit, e.name + ' (с правками)', { kind: e.kind, key: e.kind === 'url' ? e.url : (e.fileName || e.name) }, { nosave: true }); return; }
     catch (err) { /* применим исходник */ }
@@ -616,11 +619,11 @@ async function openEntry(id, startup) {
   }
 }
 /** Reads and applies a native download by filename; no-ops without the bridge and displays read/apply failures. */
-async function openDownloadFile(name) {
-  var n = native();
+async function openDownloadFile(name: string): Promise<void> {
+  const n = native();
   if (!n) return;
   try {
-    var r = await n.readFile({ name: name });
+    const r = await n.readFile({ name: name });
     closeLibrary();
     applyPlaylist(r.text, name, { kind: 'file', key: name }, {});
   } catch (e) {
@@ -631,18 +634,18 @@ async function openDownloadFile(name) {
 
 /* ================= Файловый сервер ================= */
 /** Returns the running server URL using its first address, or an empty string if stopped or no address is available. */
-function serverUrl() {
+function serverUrl(): string {
   if (!srv.running) return '';
-  var ip = srv.addresses && srv.addresses[0];
+  const ip = srv.addresses && srv.addresses[0];
   return ip ? 'http://' + ip + ':' + srv.port : '';
 }
-function renderServerUi() {
-  var url = serverUrl();
-  var hasNative = !!native();
+function renderServerUi(): void {
+  const url = serverUrl();
+  const hasNative = !!native();
   srvChk.textContent = srv.running ? 'Выключить сервер' : 'Включить сервер';
   srvChk.disabled = !hasNative;
   srvBtn.textContent = srv.running ? 'Выключить сервер' : 'Включить сервер';
-  var info;
+  let info: string;
   if (!hasNative) info = 'Доступно только в приложении.';
   else if (!srv.running) info = 'Сервер выключен.';
   else if (url) info = 'Откройте в браузере: ' + url;
@@ -652,23 +655,23 @@ function renderServerUi() {
   renderQr();
 }
 /** Displays the remote-control URL as a QR code, falling back to plain text if QR generation is unavailable or fails. */
-function renderQr() {
-  var box = $('qrBox');
+function renderQr(): void {
+  const box = document.getElementById('qrBox');
   if (!box) return;
-  var u = serverUrl() ? serverUrl() + '/remote' : '';
+  const u = serverUrl() ? serverUrl() + '/remote' : '';
   box.textContent = '';
   if (!u) return;
   if (window.qrcode) {
     try {
-      var q = window.qrcode(0, 'M');
+      const q = window.qrcode(0, 'M');
       q.addData(u);
       q.make();
       box.innerHTML = q.createSvgTag(4, 8);
-      var d = document.createElement('div');
+      const d = document.createElement('div');
       d.style.marginTop = '.4rem';
       d.textContent = u;
       box.appendChild(d);
-      var h = document.createElement('div');
+      const h = document.createElement('div');
       h.textContent = 'Наведите камеру телефона → откроется пульт Remote Supremacy';
       box.appendChild(h);
       return;
@@ -677,18 +680,18 @@ function renderQr() {
   box.textContent = u;
 }
 /** Refreshes server state from the native bridge, retaining the previous state on errors, then updates the UI. */
-async function refreshServerStatus() {
-  var n = native();
+async function refreshServerStatus(): Promise<void> {
+  const n = native();
   if (n) { try { srv = await n.serverStatus(); } catch (e) { /* оставляем прежнее состояние */ } }
   renderServerUi();
 }
 /** Starts or stops the native server and saves successful state changes; native failures are displayed as a toast. */
-async function setServer(on) {
-  var n = native();
+async function setServer(on: boolean): Promise<void> {
+  const n = native();
   if (!n) { showToast('Сервер доступен только в приложении'); renderServerUi(); return; }
   try {
     if (on) {
-      var port = toInt(lsGet(LS_PORT), 0, 0, 65535);
+      let port = toInt(lsGet(LS_PORT), 0, 0, 65535);
       if (!port) { port = 20000 + Math.floor(Math.random() * 40000); lsSet(LS_PORT, String(port)); }
       srv = await n.serverStart({ port: port });
       if (srv.port && srv.port !== port) lsSet(LS_PORT, String(srv.port));
@@ -705,29 +708,30 @@ async function setServer(on) {
 
 /* ================= Группы и фильтр ================= */
 /** Returns the channel group, using GROUP_NONE for an empty group. */
-function gkey(ch) { return ch.group || GROUP_NONE; }
+function gkey(ch: Channel): string { return ch.group || GROUP_NONE; }
 /** Rebuilds group counts in playlist order, excluding blocked groups while the PIN is locked. */
-function buildGroups() {
-  var counts = new Map(), order = [];
-  state.channels.forEach(function (ch) {
-    var k = gkey(ch);
+function buildGroups(): void {
+  const counts = new Map<string, number>(), order: string[] = [];
+  state.channels.forEach(function (ch: Channel): void {
+    const k = gkey(ch);
     if (blockedGroups.has(k) && !pinUnlocked) return;
     if (!counts.has(k)) { counts.set(k, 0); order.push(k); }
-    counts.set(k, counts.get(k) + 1);
+    // The key was inserted immediately above.
+    counts.set(k, counts.get(k)! + 1);
   });
-  state.groups = order.map(function (k) { return { key: k, label: k === GROUP_NONE ? 'Без группы' : k, count: counts.get(k) }; });
+  state.groups = order.map(function (k: string): Group { return { key: k, label: k === GROUP_NONE ? 'Без группы' : k, count: counts.get(k)! }; });
 }
 /** Updates the channel view using PIN visibility, the selected group or favorites, and a case-insensitive name/group search. */
-function computeView() {
-  var q = searchInput.value.trim().toLowerCase(), g = state.group, out = state.channels;
-  if (!pinUnlocked && blockedGroups.size) out = out.filter(function (c) { return !blockedGroups.has(gkey(c)); });
+function computeView(): void {
+  let q = searchInput.value.trim().toLowerCase(), g = state.group, out = state.channels;
+  if (!pinUnlocked && blockedGroups.size) out = out.filter(function (c: Channel): boolean { return !blockedGroups.has(gkey(c)); });
   if (g === GROUP_FAV) out = out.filter(isFav);
-  else if (g) out = out.filter(function (c) { return gkey(c) === g; });
-  if (q) out = out.filter(function (c) { return c.nameLower.indexOf(q) !== -1 || c.groupLower.indexOf(q) !== -1; });
+  else if (g) out = out.filter(function (c: Channel): boolean { return gkey(c) === g; });
+  if (q) out = out.filter(function (c: Channel): boolean { return c.nameLower.indexOf(q) !== -1 || c.groupLower.indexOf(q) !== -1; });
   state.view = out;
 }
-function makeChip(key, label, count) {
-  var el = mk('div', 'chip' + (state.group === key ? ' active' : ''));
+function makeChip(key: string, label: string, count: number): NavElement {
+  const el = mk('div', 'chip' + (state.group === key ? ' active' : ''));
   el.setAttribute('data-nav', '1');
   el._group = key;
   el.appendChild(document.createTextNode(label));
@@ -735,39 +739,39 @@ function makeChip(key, label, count) {
   return el;
 }
 /** Opens PIN setup if unset, relocks visible groups if unlocked, or prompts for the existing PIN. */
-function armUnlock() {
+function armUnlock(): void {
   if (!parentPin) { pinOpen('set'); return; }
   if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return; }
   pinOpen('unlock');
 }
 /* ================= Экранный PIN-пад (3 цифры) ================= */
-var pinMode = 'unlock', pinBuf = '';
-var pinFailCount = 0;            // неудачные попытки ввода PIN до закрытия окна
-var PIN_MAX_FAILS = 5;
-function pinpadOpen() { return pinpadEl.classList.contains('open'); }
+let pinMode: 'unlock' | 'set' = 'unlock', pinBuf: string = '';
+let pinFailCount: number = 0;            // неудачные попытки ввода PIN до закрытия окна
+const PIN_MAX_FAILS = 5;
+function pinpadOpen(): boolean { return pinpadEl.classList.contains('open'); }
 /** Opens a cleared PIN pad in setup mode for "set", or unlock mode otherwise. */
-function pinOpen(mode) {
+function pinOpen(mode: 'set' | 'unlock'): void {
   pinMode = mode; pinBuf = ''; pinFailCount = 0;
   pinTitle.textContent = mode === 'set' ? 'Задайте PIN из 3 цифр' : 'Введите PIN (3 цифры)';
   pinRenderDots(); pinRenderGrid();
   pinpadEl.classList.add('open');
-  var b = pinGrid.querySelector('button'); if (b) setFocus(b, false);
+  const b = pinGrid.querySelector('button'); if (b) setFocus(b, false);
 }
-function pinClose() {
+function pinClose(): void {
   pinpadEl.classList.remove('open'); pinBuf = '';
   if (focusedEl && !document.body.contains(focusedEl)) focusedEl = null;
 }
-function pinRenderDots() {
+function pinRenderDots(): void {
   pinDots.textContent = '';
-  for (var i = 0; i < 3; i++) pinDots.appendChild(mk('i', i < pinBuf.length ? 'on' : ''));
+  for (let i = 0; i < 3; i++) pinDots.appendChild(mk('i', i < pinBuf.length ? 'on' : ''));
 }
 /** Builds the PIN keypad, submitting automatically at three digits or on OK with three digits entered. */
-function pinRenderGrid() {
+function pinRenderGrid(): void {
   pinGrid.textContent = '';
-  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '\u232B', '0', 'OK'].forEach(function (lab) {
-    var b = mk('button', '', lab);
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '\u232B', '0', 'OK'].forEach(function (lab: string): void {
+    const b = mk('button', '', lab);
     b.setAttribute('data-nav', '1'); b.type = 'button';
-    b._act = function () {
+    b._act = function (): void {
       if (lab === '\u232B') { pinBuf = pinBuf.slice(0, -1); pinRenderDots(); }
       else if (lab === 'OK') { if (pinBuf.length === 3) pinSubmit(); }
       else if (pinBuf.length < 3) { pinBuf += lab; pinRenderDots(); if (pinBuf.length === 3) pinSubmit(); }
@@ -776,8 +780,8 @@ function pinRenderGrid() {
   });
 }
 /** Saves a new PIN or checks the entered PIN, revealing groups on success and clearing the input on mismatch. */
-function pinSubmit() {
-  var v = pinBuf;
+function pinSubmit(): void {
+  const v = pinBuf;
   if (pinMode === 'set') {
     parentPin = v; lsSet('iptv.pin', v); pinUnlocked = true;
     pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast('PIN задан');
@@ -791,23 +795,23 @@ function pinSubmit() {
     if (pinFailCount >= PIN_MAX_FAILS) {
       pinClose();
       showToast('Слишком много неверных попыток');
-      setTimeout(function () { if (!pinUnlocked && parentPin) pinOpen('unlock'); }, 10000); // повторное окно через 10 с
+      window.setTimeout(function (): void { if (!pinUnlocked && parentPin) pinOpen('unlock'); }, 10000); // повторное окно через 10 с
     } else {
       showToast('Неверный PIN (' + pinFailCount + '/' + PIN_MAX_FAILS + ')');
     }
   }
 }
-function renderGroups() {
+function renderGroups(): void {
   groupBar.textContent = '';
   if (!state.channels.length) { groupBar.style.display = 'none'; return; }
   groupBar.style.display = 'flex';
-  var favCount = 0;
-  state.channels.forEach(function (c) { if (isFav(c)) favCount++; });
-  var frag = document.createDocumentFragment();
+  let favCount = 0;
+  state.channels.forEach(function (c: Channel): void { if (isFav(c)) favCount++; });
+  const frag = document.createDocumentFragment();
   frag.appendChild(makeChip(GROUP_ALL, 'Все', state.channels.length));
   frag.appendChild(makeChip(GROUP_FAV, '\u2605 Избранное', favCount));
-  state.groups.forEach(function (g) { frag.appendChild(makeChip(g.key, g.label, g.count)); });
-  var lock = mk('div', 'chip' + (pinUnlocked ? ' active' : ''));
+  state.groups.forEach(function (g: Group): void { frag.appendChild(makeChip(g.key, g.label, g.count)); });
+  const lock = mk('div', 'chip' + (pinUnlocked ? ' active' : ''));
   lock.setAttribute('data-nav', '1');
   lock.appendChild(document.createTextNode(pinUnlocked ? '\uD83D\uDD13' : (parentPin ? '\uD83D\uDD12 Блок (' + blockedGroups.size + ')' : '\uD83D\uDD12 PIN')));
   lock._act = armUnlock;
@@ -816,7 +820,7 @@ function renderGroups() {
   if (focusedEl && !document.body.contains(focusedEl)) focusedEl = null;
 }
 /** Selects and saves a group key, resets pagination and scroll, and focuses its chip when present. */
-function setGroup(key) {
+function setGroup(key: string): void {
   state.group = key;
   lsSet(LS_GROUP, key);
   state.renderCount = PAGE_SIZE;
@@ -824,7 +828,7 @@ function setGroup(key) {
   renderGroups();
   renderGrid(false);
   gridPane.scrollTop = 0;
-  var act = groupBar.querySelector('.chip.active');
+  const act = groupBar.querySelector<NavElement>('.chip.active');
   if (act) {
     setFocus(act, false);
     try { act.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* ignore */ }
@@ -832,20 +836,20 @@ function setGroup(key) {
 }
 
 /** Toggles a channel URL in saved favorites and refreshes affected UI; a missing channel is ignored. */
-function toggleFav(ch) {
+function toggleFav(ch: Channel | null | undefined): void {
   if (!ch) return;
-  var on;
+  let on: boolean;
   if (favs.has(ch.url)) { favs.delete(ch.url); on = false; } else { favs.add(ch.url); on = true; }
   saveFavs();
   try { if (navigator.vibrate) navigator.vibrate(on ? [30, 40, 30] : 30); } catch (e) { /* ignore */ }
   showToast((on ? '\u2605 В избранное: ' : '\u2606 Убрано из избранного: ') + ch.name);
-  var el = cardMap.get(ch);
+  const el = cardMap.get(ch);
   if (el) el.classList.toggle('fav', on);
   renderGroups();
   if (!on && state.group === GROUP_FAV && state.mode === 'menu') { computeView(); renderGrid(true); }
 }
 /** Handles the native remote Menu button by toggling the current or focused channel favorite, or prompting for a channel. */
-window.__iptvMenu = function () {          // кнопка «три полоски» на пульте (вызывается из MainActivity)
+window.__iptvMenu = function (): void {          // кнопка «три полоски» на пульте (вызывается из MainActivity)
   if (state.mode === 'player' && state.current) { toggleFav(state.current); showOsd(); return; }
   if (focusedEl && focusedEl._channel) { toggleFav(focusedEl._channel); return; }
   showToast('Наведите курсор на канал');
@@ -853,29 +857,29 @@ window.__iptvMenu = function () {          // кнопка «три полоск
 
 /* ================= Сетка каналов ================= */
 /** Creates a logo placeholder from the first trimmed character, uppercased, or "?" for an empty name. */
-function placeholder(name) {
+function placeholder(name: string): HTMLSpanElement {
   return mk('span', 'ph', (name.trim().charAt(0) || '?').toUpperCase());
 }
 /** Builds a navigable channel card with favorite and EPG state, substituting a placeholder if its logo fails to load. */
-function createCard(ch) {
-  var el = mk('div', 'card' + (isFav(ch) ? ' fav' : ''));
+function createCard(ch: Channel): NavElement {
+  const el = mk('div', 'card' + (isFav(ch) ? ' fav' : ''));
   el.setAttribute('data-nav', '1');
   el.title = ch.name;
   el._channel = ch;
-  var star = mk('span', 'star', '\u2605');
-  var logo = mk('div', 'logo');
+  const star = mk('span', 'star', '\u2605');
+  const logo = mk('div', 'logo');
   if (ch.logo) {
-    var img = document.createElement('img');
+    const img = document.createElement('img');
     img.alt = '';
     img.loading = 'lazy';
     img.referrerPolicy = 'no-referrer';
-    img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); logo.appendChild(placeholder(ch.name)); };
+    img.onerror = function (): void { if (img.parentNode) img.parentNode.removeChild(img); logo.appendChild(placeholder(ch.name)); };
     img.src = ch.logo;
     logo.appendChild(img);
   } else {
     logo.appendChild(placeholder(ch.name));
   }
-  var epgRoot = mk('div', 'epg'), et = mk('div', 'et'), bar = mk('i', 'bar'), fill = document.createElement('b');
+  const epgRoot = mk('div', 'epg'), et = mk('div', 'et'), bar = mk('i', 'bar'), fill = document.createElement('b');
   bar.appendChild(fill);
   epgRoot.appendChild(et); epgRoot.appendChild(bar);
   el._epg = { root: epgRoot, et: et, fill: fill };
@@ -886,21 +890,21 @@ function createCard(ch) {
   epgPaintCard(el);
   return el;
 }
-function createMoreCard(rest) {
-  var el = mk('div', 'card more', 'Показать ещё\n(осталось ' + rest + ')');
+function createMoreCard(rest: number): NavElement {
+  const el = mk('div', 'card more', 'Показать ещё\n(осталось ' + rest + ')');
   el.setAttribute('data-nav', '1');
   el.style.whiteSpace = 'pre-line';
   return el;
 }
 /** Rebuilds the paginated channel grid and schedules an EPG refresh; a truthy keepScroll restores the prior scroll offset. */
-function renderGrid(keepScroll) {
-  var st = gridPane.scrollTop;
+function renderGrid(keepScroll: boolean): void {
+  const st = gridPane.scrollTop;
   grid.textContent = '';
   cardMap.clear();
-  var frag = document.createDocumentFragment();
-  var n = Math.min(state.view.length, state.renderCount);
-  for (var i = 0; i < n; i++) {
-    var el = createCard(state.view[i]);
+  const frag = document.createDocumentFragment();
+  const n = Math.min(state.view.length, state.renderCount);
+  for (let i = 0; i < n; i++) {
+    const el = createCard(state.view[i]);
     cardMap.set(state.view[i], el);
     frag.appendChild(el);
   }
@@ -912,32 +916,32 @@ function renderGrid(keepScroll) {
   }
   grid.appendChild(frag);
   if (keepScroll) gridPane.scrollTop = st;
-  var total = state.channels.length;
+  const total = state.channels.length;
   countEl.textContent = total ? (state.view.length === total ? total + ' ' + plural(total) : state.view.length + ' из ' + total) : '';
   if (focusedEl && !document.body.contains(focusedEl)) focusedEl = null;
   markPlaying();
   scheduleEpgRefresh();
 }
-function markPlaying() {
-  cardMap.forEach(function (el, ch) { el.classList.toggle('playing', ch === state.current); });
+function markPlaying(): void {
+  cardMap.forEach(function (el: NavElement, ch: Channel): void { el.classList.toggle('playing', ch === state.current); });
 }
-function applyFilter() {
+function applyFilter(): void {
   computeView();
   state.renderCount = PAGE_SIZE;
   renderGrid(false);
 }
 /** Adds one page to the rendered range and focuses its first new channel, if present. */
-function showMore() {
-  var firstNew = state.renderCount;
+function showMore(): void {
+  const firstNew = state.renderCount;
   state.renderCount += PAGE_SIZE;
   renderGrid(true);
-  var el = cardMap.get(state.view[firstNew]);
+  const el = cardMap.get(state.view[firstNew]);
   if (el) setFocus(el);
 }
 
 /* ================= Телепрограмма (EPG) ================= */
-function renderEpgInfo() {
-  var t;
+function renderEpgInfo(): void {
+  let t: string;
   if (!native()) t = 'Телепрограмма доступна только в Android-приложении.';
   else if (!epg.enabled) t = 'Телепрограмма выключена.';
   else if (epg.status === 'loading') t = 'Загрузка телепрограммы…';
@@ -949,38 +953,38 @@ function renderEpgInfo() {
   epgChk.disabled = !native();
 }
 /** Debounces a non-forced EPG reload by 400 ms. */
-function scheduleEpgReload() {
+function scheduleEpgReload(): void {
   clearTimeout(epgReloadTimer);
-  epgReloadTimer = setTimeout(function () { epgReload(false); }, 400);
+  epgReloadTimer = window.setTimeout(function (): void { epgReload(false); }, 400);
 }
 /**
  * Loads native EPG data from the selected file, falling back to the playlist header URL on failure.
  * A truthy force is passed to the native loader; overlapping requests queue a follow-up, prioritizing force.
  * Load errors update EPG status rather than rejecting; disabled or missing sources clear cached entries.
  */
-async function epgReload(force) {
-  var n = native();
+async function epgReload(force: boolean): Promise<void> {
+  const n = native();
   if (!n) { renderEpgInfo(); return; }
   if (!epg.enabled) { epg.status = 'off'; epg.cache.clear(); renderEpgInfo(); epgPaintAll(); return; }
   if (epg.loading) { epg.pending = force ? 'force' : (epg.pending || 'normal'); return; }
-  var cands = [];
+  const cands = [];
   if (epg.file) cands.push({ source: 'file', name: epg.file, url: '' });
   if (headerEpgUrl) cands.push({ source: 'url', name: '', url: headerEpgUrl });
   if (!cands.length) { epg.status = 'none'; epg.cache.clear(); renderEpgInfo(); epgPaintAll(); return; }
 
-  var idSet = new Set(), nameSet = new Set();
-  state.channels.forEach(function (c) {
+  const idSet = new Set<string>(), nameSet = new Set<string>();
+  state.channels.forEach(function (c: Channel): void {
     if (c.tvgId) idSet.add(c.tvgId);
     nameSet.add(c.name);
     if (c.tvgName) nameSet.add(c.tvgName);
   });
-  var ids = Array.from(idSet), names = Array.from(nameSet);
+  const ids = Array.from(idSet), names = Array.from(nameSet);
   epg.loading = true;
   epg.status = 'loading';
   renderEpgInfo();
-  for (var i = 0; i < cands.length; i++) {
-    var c = cands[i];
-    var sig = (c.source === 'file' ? c.name : c.url) + '|' + state.channels.length + '|' + ids.length;
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i];
+    const sig = (c.source === 'file' ? c.name : c.url) + '|' + state.channels.length + '|' + ids.length;
     try {
       epg.info = await n.epgLoad({ source: c.source, name: c.name, url: c.url, ids: ids, names: names, sig: sig, force: !!force });
       epg.status = 'ok';
@@ -995,10 +999,10 @@ async function epgReload(force) {
   epg.cache.clear();
   renderEpgInfo();
   epgRefresh();
-  if (epg.pending) { var f = epg.pending === 'force'; epg.pending = ''; epgReload(f); }
+  if (epg.pending) { const f = epg.pending === 'force'; epg.pending = ''; epgReload(f); }
 }
 /** Saves and enables the selected EPG filename, closes the library, and starts a forced reload. */
-function setEpgFile(name) {
+function setEpgFile(name: string): void {
   epg.file = name;
   lsSet(LS_EPGFILE, name);
   epg.enabled = true;
@@ -1009,44 +1013,44 @@ function setEpgFile(name) {
 }
 
 /** Debounces the visible-channel EPG lookup by 250 ms. */
-function scheduleEpgRefresh() {
+function scheduleEpgRefresh(): void {
   clearTimeout(epgTimer);
-  epgTimer = setTimeout(epgRefresh, 250);
+  epgTimer = window.setTimeout(epgRefresh, 250);
 }
 /**
  * Updates cached now/next programs for rendered channels and the current channel, then repaints EPG UI.
  * A native lookup failure stops further lookups and leaves already cached results available.
  */
-async function epgRefresh() {
-  var n = native();
+async function epgRefresh(): Promise<void> {
+  const n = native();
   if (!n || !epg.enabled || epg.status !== 'ok') { epgPaintAll(); return; }
-  var chans = [];
-  cardMap.forEach(function (el, ch) { chans.push(ch); });
+  const chans: Channel[] = [];
+  cardMap.forEach(function (el: NavElement, ch: Channel): void { chans.push(ch); });
   if (state.current && chans.indexOf(state.current) === -1) chans.push(state.current);
-  for (var off = 0; off < chans.length; off += 300) {
-    var part = chans.slice(off, off + 300), res;
+  for (let off = 0; off < chans.length; off += 300) {
+    let part = chans.slice(off, off + 300), res: EpgLookupResponse;
     try {
-      res = await n.epgLookup({ items: part.map(function (c) { return { id: c.tvgId, name: c.name, alt: c.tvgName }; }) });
+      res = await n.epgLookup({ items: part.map(function (c: Channel): { id: string; name: string; alt: string; } { return { id: c.tvgId, name: c.name, alt: c.tvgName }; }) });
     } catch (e) { break; }
-    var seen = {};
-    (res.results || []).forEach(function (r) {
-      var c = part[r.i];
+    const seen: Record<number, number> = {};
+    (res.results || []).forEach(function (r: { i: number; n?: EpgProgram | null; x?: EpgProgram | null; }): void {
+      const c = part[r.i];
       if (c) { epg.cache.set(c, { n: r.n || null, x: r.x || null }); seen[r.i] = 1; }
     });
-    part.forEach(function (c, i) { if (!seen[i]) epg.cache.set(c, null); });
+    part.forEach(function (c: Channel, i: number): void { if (!seen[i]) epg.cache.set(c, null); });
   }
   epgPaintAll();
 }
 /** Returns elapsed program progress as a percentage clamped to 0–100 for positive-duration s/e Unix timestamps in milliseconds. */
-function progress(p) {
-  var v = (Date.now() - p.s) / (p.e - p.s);
+function progress(p: EpgProgram): number {
+  const v = (Date.now() - p.s) / (p.e - p.s);
   return Math.max(0, Math.min(1, v)) * 100;
 }
 /** Paints cached current or next program data on a channel card, hiding it when EPG or program data is unavailable. */
-function epgPaintCard(el) {
-  var box = el._epg;
+function epgPaintCard(el: NavElement): void {
+  const box = el._epg;
   if (!box) return;
-  var d = epg.enabled ? epg.cache.get(el._channel) : null;
+  const d = epg.enabled ? (el._channel ? epg.cache.get(el._channel) : undefined) : null;
   if (d && d.n) {
     box.et.textContent = d.n.t;
     box.fill.style.width = progress(d.n) + '%';
@@ -1060,8 +1064,8 @@ function epgPaintCard(el) {
   }
 }
 /** Paints cached now/next text and progress for ch, hiding the block when neither program is available. */
-function epgPaintBlock(blockEl, nowEl, nextEl, barEl, ch) {
-  var d = (epg.enabled && ch) ? epg.cache.get(ch) : null;
+function epgPaintBlock(blockEl: HTMLElement, nowEl: HTMLElement, nextEl: HTMLElement, barEl: HTMLElement, ch: Channel | null): void {
+  const d = (epg.enabled && ch) ? epg.cache.get(ch) : null;
   if (!d || (!d.n && !d.x)) { blockEl.style.display = 'none'; return; }
   blockEl.style.display = 'block';
   if (d.n) {
@@ -1073,21 +1077,21 @@ function epgPaintBlock(blockEl, nowEl, nextEl, barEl, ch) {
   }
   nextEl.textContent = d.x ? 'Далее: ' + d.x.t + '  ' + fmtTime(d.x.s) : '';
 }
-function epgPaintAll() {
-  cardMap.forEach(function (el) { epgPaintCard(el); });
+function epgPaintAll(): void {
+  cardMap.forEach(function (el: NavElement): void { epgPaintCard(el); });
   epgPaintBlock(nowEpg, nowEpgNow, nowEpgNext, nowEpgBar, state.current);
   epgPaintBlock(osdEpg, osdEpgNow, osdEpgNext, osdEpgBar, state.current);
 }
 
-function guideOpen() { return guide.classList.contains('open'); }
-function closeGuide() { guide.classList.remove('open'); }
+function guideOpen(): boolean { return guide.classList.contains('open'); }
+function closeGuide(): void { guide.classList.remove('open'); }
 
 /* ================= Панель избранного в плеере ================= */
-var favList = [], favIdx = 0;
-function favOpen() { return favsPanel.classList.contains('open'); }
-function closeFavs() { favsPanel.classList.remove('open'); }
+let favList: Channel[] = [], favIdx: number = 0;
+function favOpen(): boolean { return favsPanel.classList.contains('open'); }
+function closeFavs(): void { favsPanel.classList.remove('open'); }
 /** Rebuilds the favorites panel from all channels, wrapping an out-of-range selection and scrolling it into view. */
-function renderFavs() {
+function renderFavs(): void {
   favsList.textContent = '';
   favList = state.channels.filter(isFav);
   if (!favList.length) {
@@ -1097,17 +1101,17 @@ function renderFavs() {
   }
   if (favIdx >= favList.length) favIdx = 0;
   if (favIdx < 0) favIdx = favList.length - 1;
-  favList.forEach(function (c, i) {
-    var row = mk('div', 'frow' + (c === state.current ? ' cur' : '') + (i === favIdx ? ' focused' : ''));
+  favList.forEach(function (c: Channel, i: number): void {
+    const row = mk('div', 'frow' + (c === state.current ? ' cur' : '') + (i === favIdx ? ' focused' : ''));
     row.appendChild(mk('div', 'fi', String(i + 1)));
     row.appendChild(mk('div', 'fn', c.name));
     favsList.appendChild(row);
   });
-  var act = favsList.querySelector('.frow.focused');
+  const act = favsList.querySelector('.frow.focused');
   if (act) { try { act.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
 }
 /** Opens favorites with the current channel selected when present; no-ops if no channel is current. */
-function openFavs() {
+function openFavs(): void {
   if (!state.current) return;
   favList = state.channels.filter(isFav);
   favIdx = favList.indexOf(state.current);
@@ -1117,63 +1121,63 @@ function openFavs() {
   showOsd();
 }
 /** Moves the favorite selection by delta positions with wraparound; does nothing for an empty list. */
-function moveFav(delta) {
+function moveFav(delta: number): void {
   if (!favList.length) return;
   favIdx = (favIdx + delta + favList.length) % favList.length;
   renderFavs();
 }
 /** Plays the selected favorite if present, then closes the favorites panel. */
-function pickFav() {
-  var c = favList[favIdx];
+function pickFav(): void {
+  const c = favList[favIdx];
   if (c) playChannel(c);
   closeFavs();
 }
 
-var GUIDE_LIMIT = 500;
-var guideProgs = [], guideIdx = 0;
+const GUIDE_LIMIT = 500;
+let guideProgs: EpgProgram[] = [], guideIdx: number = 0;
 /** Formats a Unix timestamp in milliseconds as a Russian local date, adding a relative label within two days of today. */
-function guideDayLabel(ms) {
-  var d = new Date(ms), now = new Date();
-  var d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  var diff = Math.round((dd - d0) / 86400000);
-  var rel = diff === 0 ? 'Сегодня' : diff === -1 ? 'Вчера' : diff === 1 ? 'Завтра' : diff === -2 ? 'Позавчера' : diff === 2 ? 'Послезавтра' : '';
-  var wd = d.toLocaleDateString('ru-RU', { weekday: 'short' });
-  var dm = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+function guideDayLabel(ms: number): string {
+  const d = new Date(ms), now = new Date();
+  const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((dd - d0) / 86400000);
+  const rel = diff === 0 ? 'Сегодня' : diff === -1 ? 'Вчера' : diff === 1 ? 'Завтра' : diff === -2 ? 'Позавчера' : diff === 2 ? 'Послезавтра' : '';
+  const wd = d.toLocaleDateString('ru-RU', { weekday: 'short' });
+  const dm = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   return (rel ? rel + ' · ' : '') + wd + ', ' + dm;
 }
 /** Stores and renders the supplied program order with local day headings, archive hints, and current/first-future descriptions. */
-function renderGuide(programs) {
+function renderGuide(programs: EpgProgram[]): void {
   guideProgs = programs.slice();
   guideList.textContent = '';
   if (!programs.length) { guideList.appendChild(mk('div', 'gd', 'Для этого канала нет программы передач.')); return; }
-  var ch = state.current, canCap = !!(ch && (ch.catchupSource || headerCatchup.source));
-  var now = Date.now(), lastDay = null, nextDone = false;
-  programs.forEach(function (p, i) {
-    var dk = new Date(p.s).toDateString();
+  const ch = state.current, canCap = !!(ch && (ch.catchupSource || headerCatchup.source));
+  let now = Date.now(), lastDay: string | null = null, nextDone = false;
+  programs.forEach(function (p: EpgProgram, i: number): void {
+    const dk = new Date(p.s).toDateString();
     if (dk !== lastDay) { lastDay = dk; guideList.appendChild(mk('div', 'gday', guideDayLabel(p.s))); }
-    var past = p.e <= now, cur = p.s <= now && p.e > now;
-    var row = mk('div', 'grow' + (cur ? ' cur' : (past ? ' past' : ' fut')) + (i === guideIdx ? ' focused' : ''));
+    const past = p.e <= now, cur = p.s <= now && p.e > now;
+    const row = mk('div', 'grow' + (cur ? ' cur' : (past ? ' past' : ' fut')) + (i === guideIdx ? ' focused' : ''));
     row._idx = i;
     row.appendChild(mk('div', 'gt', fmtTime(p.s) + '\u2013' + fmtTime(p.e) + (cur ? ' · идёт сейчас' : (past && canCap ? ' · ⟲ архив' : ''))));
     row.appendChild(mk('div', 'gn', p.t));
-    var showDesc = p.d && cur;
+    let showDesc = p.d && cur;
     if (!nextDone && p.s > now) { if (p.d) showDesc = true; nextDone = true; }
     if (showDesc) row.appendChild(mk('div', 'gd', p.d));
     guideList.appendChild(row);
   });
 }
-function guideScrollToIdx() {
-  var rows = guideList.querySelectorAll('.grow');
-  var row = rows[guideIdx];
+function guideScrollToIdx(): void {
+  const rows = guideList.querySelectorAll('.grow');
+  const row = rows[guideIdx];
   if (row) { try { row.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
 }
 /** Moves the program selection by delta positions with wraparound and scrolls it into view. */
-function guideMove(delta) {
+function guideMove(delta: number): void {
   if (!guideProgs.length) return;
   guideIdx = (guideIdx + delta + guideProgs.length) % guideProgs.length;
-  var rows = guideList.querySelectorAll('.grow');
-  for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('focused', i === guideIdx);
+  const rows = guideList.querySelectorAll('.grow');
+  for (let i = 0; i < rows.length; i++) rows[i].classList.toggle('focused', i === guideIdx);
   guideScrollToIdx();
 }
 /**
@@ -1181,14 +1185,14 @@ function guideMove(delta) {
  * Program s/e values are Unix milliseconds; time placeholders use Unix seconds and duration uses
  * rounded minutes with a minimum of one. Unknown placeholders remain unchanged; append mode extends ch.url.
  */
-function catchupUrl(ch, p) {
-  var tmpl = (ch && ch.catchupSource) || headerCatchup.source || '';
+function catchupUrl(ch: Channel, p: EpgProgram): string | null {
+  const tmpl = (ch && ch.catchupSource) || headerCatchup.source || '';
   if (!tmpl) return null;
-  var mode = String((ch && ch.catchup) || headerCatchup.mode || '').toLowerCase();
-  var sSec = Math.floor(p.s / 1000), eSec = Math.floor(p.e / 1000), nowSec = Math.floor(Date.now() / 1000);
-  var dur = Math.max(1, Math.round((p.e - p.s) / 60000));
-  var u = tmpl.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, function (m, a, b) {
-    var k = String(a || b).toLowerCase();
+  const mode = String((ch && ch.catchup) || headerCatchup.mode || '').toLowerCase();
+  const sSec = Math.floor(p.s / 1000), eSec = Math.floor(p.e / 1000), nowSec = Math.floor(Date.now() / 1000);
+  const dur = Math.max(1, Math.round((p.e - p.s) / 60000));
+  const u = tmpl.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, function (m: string, a: string | undefined, b: string | undefined): string {
+    const k = String(a || b).toLowerCase();
     if (k === 'start' || k === 'utc' || k === 'stime') return String(sSec);
     if (k === 'end' || k === 'timestamp' || k === 'etime') return String(eSec);
     if (k === 'lutc' || k === 'now') return String(nowSec);
@@ -1204,12 +1208,12 @@ function catchupUrl(ch, p) {
   return u;
 }
 /** Plays the selected past program via its archive template, resumes live for the current program, or shows why it cannot play. */
-function guidePick() {
-  var p = guideProgs[guideIdx], ch = state.current;
+function guidePick(): void {
+  const p = guideProgs[guideIdx], ch = state.current;
   if (!p || !ch) return;
-  var now = Date.now();
+  const now = Date.now();
   if (p.e <= now) {
-    var url = catchupUrl(ch, p);
+    const url = catchupUrl(ch, p);
     if (!url) { showToast('У этого канала нет архива'); return; }
     closeGuide(); showToast('Архив: ' + p.t); playUrl(url);
   } else if (p.s <= now) {
@@ -1219,15 +1223,15 @@ function guidePick() {
   }
 }
 /** Requests up to 500 native EPG programs for the current channel and opens the guide at current or next; request errors produce a toast. */
-async function openGuide() {
-  var ch = state.current, n = native();
+async function openGuide(): Promise<void> {
+  const ch = state.current, n = native();
   if (!ch) return;
   if (!n || !epg.enabled || epg.status !== 'ok') { showToast('Телепрограмма недоступна'); return; }
   try {
-    var r = await n.epgSchedule({ id: ch.tvgId, name: ch.name, alt: ch.tvgName, limit: GUIDE_LIMIT });
-    var progs = r.programs || [], now = Date.now(), ci = -1;
-    for (var i = 0; i < progs.length; i++) { if (progs[i].s <= now && progs[i].e > now) { ci = i; break; } }
-    if (ci < 0) { for (var j = 0; j < progs.length; j++) { if (progs[j].s > now) { ci = j; break; } } }
+    const r = await n.epgSchedule({ id: ch.tvgId, name: ch.name, alt: ch.tvgName, limit: GUIDE_LIMIT });
+    let progs = r.programs || [], now = Date.now(), ci = -1;
+    for (let i = 0; i < progs.length; i++) { if (progs[i].s <= now && progs[i].e > now) { ci = i; break; } }
+    if (ci < 0) { for (let j = 0; j < progs.length; j++) { if (progs[j].s > now) { ci = j; break; } } }
     guideIdx = ci < 0 ? 0 : ci;
     guideTitle.textContent = ch.name;
     renderGuide(progs);
@@ -1239,18 +1243,18 @@ async function openGuide() {
 
 /* ================= Воспроизведение ================= */
 /** Shows a video overlay message; a truthy isError also marks the current playback attempt as failed. */
-function showVideoMsg(text, isError) {
+function showVideoMsg(text: string, isError: boolean): void {
   videoMsg.textContent = text;
   videoMsg.className = 'show' + (isError ? ' error' : '');
   if (isError) playFailed = true;
 }
-function hideVideoMsg() { videoMsg.className = ''; }
+function hideVideoMsg(): void { videoMsg.className = ''; }
 /** Attempts browser video playback, ignoring synchronous errors and rejected play promises, including autoplay denial. */
-function safePlay() {
-  try { var p = video.play(); if (p && p.catch) p.catch(function () { /* автозапуск запрещён — ждём действия */ }); } catch (e) { /* ignore */ }
+function safePlay(): void {
+  try { const p = video.play(); if (p && p.catch) p.catch(function (): void { /* автозапуск запрещён — ждём действия */ }); } catch (e) { /* ignore */ }
 }
 /** Invalidates pending playback attempts, clears browser media and HLS state, and requests native playback stop. */
-function stopPlayback() {
+function stopPlayback(): void {
   playToken++;
   gating = false;
   hasPlayed = false;
@@ -1259,19 +1263,19 @@ function stopPlayback() {
   try { video.pause(); } catch (e) { /* ignore */ }
   video.removeAttribute('src');
   try { video.load(); } catch (e) { /* ignore */ }
-  var np = playerPlugin();
+  const np = playerPlugin();
   if (np) { try { np.stop(); } catch (e) { /* ignore */ } }
 }
-function hlsAvailable() { return !!(window.Hls && window.Hls.isSupported()); }
+function hlsAvailable(): boolean { return !!(window.Hls && window.Hls.isSupported()); }
 
 /**
  * Returns buffered seconds ahead of the playhead from the first range ending no earlier than 0.1 seconds behind it.
  * Returns zero if no such range is found or buffered-range access fails.
  */
-function bufferedAhead() {
+function bufferedAhead(): number {
   try {
-    var b = video.buffered, ct = video.currentTime;
-    for (var i = 0; i < b.length; i++) {
+    const b = video.buffered, ct = video.currentTime;
+    for (let i = 0; i < b.length; i++) {
       if (b.end(i) >= ct - 0.1) return Math.max(0, b.end(i) - Math.max(ct, b.start(i)));
     }
   } catch (e) { /* ignore */ }
@@ -1281,24 +1285,25 @@ function bufferedAhead() {
  * Waits for ms milliseconds of buffered video, or until more than ms + 8,000 ms have elapsed, before attempting play.
  * A stale playback token or user pause cancels polling; a zero duration attempts playback immediately.
  */
-function gatePlay(token, ms) {
+function gatePlay(token: number, ms: number): void {
   if (!ms) { gating = false; safePlay(); return; }
   gating = true;
-  var t0 = Date.now();
-  (function check() {
+  const t0 = Date.now();
+  function check(): void {
     if (token !== playToken || userPaused) { gating = false; return; }
     if (bufferedAhead() * 1000 >= ms || Date.now() - t0 > ms + 8000) { gating = false; safePlay(); return; }
     showVideoMsg('Буферизация…', false);
-    setTimeout(check, 120);
-  })();
+    window.setTimeout(check, 120);
+  }
+  check();
 }
 
 /**
  * Starts browser media playback with the configured buffer delay for this playback token.
  * On a media error, tries HLS.js once if allowHlsFallback is truthy and supported; otherwise displays an error.
  */
-function startNative(url, token, allowHlsFallback) {
-  var handler = function () {
+function startNative(url: string, token: number, allowHlsFallback: boolean): void {
+  const handler = function (): void {
     if (token !== playToken) return;
     video.removeEventListener('error', handler);
     nativeErrHandler = null;
@@ -1315,23 +1320,24 @@ function startNative(url, token, allowHlsFallback) {
  * Unrecovered fatal errors fall back to browser media when allowNativeFallback is truthy, or display an error.
  * Synchronous HLS setup errors propagate to the caller.
  */
-function startHls(url, token, allowNativeFallback) {
-  var H = window.Hls, ms = settings.bufferMs;
-  var cfg = { enableWorker: true, lowLatencyMode: false, backBufferLength: 30,
+function startHls(url: string, token: number, allowNativeFallback: boolean): void {
+  // Both callers first check hlsAvailable(); no asynchronous gap precedes this read.
+  const H = window.Hls!, ms = settings.bufferMs;
+  const cfg: Partial<HlsConfig> = { enableWorker: true, lowLatencyMode: false, backBufferLength: 30,
     maxBufferLength: Math.max(30, Math.ceil(ms / 1000) + 15),
     manifestLoadingMaxRetry: 2, levelLoadingMaxRetry: 2, fragLoadingMaxRetry: 3 };
   // Для прямого эфира буфер = отступ от «живого» края
   if (ms > 0) cfg.liveSyncDuration = Math.max(1, ms / 1000); else cfg.liveSyncDurationCount = 1;
-  var h = new H(cfg);
+  const h = new H(cfg);
   hls = h;
-  var netRetries = 0, mediaRetries = 0;
-  h.on(H.Events.MANIFEST_PARSED, function () { if (token === playToken) gatePlay(token, ms); });
-  h.on(H.Events.ERROR, function (ev, data) {
+  let netRetries = 0, mediaRetries = 0;
+  h.on(H.Events.MANIFEST_PARSED, function (): void { if (token === playToken) gatePlay(token, ms); });
+  h.on(H.Events.ERROR, function (ev: Events.ERROR, data: ErrorData): void {
     if (token !== playToken || !data || !data.fatal) return;
     if (data.type === H.ErrorTypes.NETWORK_ERROR && netRetries < 2) {
       netRetries++;
       showVideoMsg('Проблема сети, повтор ' + netRetries + '…', false);
-      setTimeout(function () { if (token === playToken && hls === h) h.startLoad(); }, 1200);
+      window.setTimeout(function (): void { if (token === playToken && hls === h) h.startLoad(); }, 1200);
       return;
     }
     if (data.type === H.ErrorTypes.MEDIA_ERROR && mediaRetries < 2) {
@@ -1348,22 +1354,22 @@ function startHls(url, token, allowNativeFallback) {
   h.attachMedia(video);
 }
 /** Starts a stream through the native player if available, otherwise chooses HLS.js or browser media with a fallback on media errors. Synchronous setup errors propagate. */
-function playUrl(url) {
+function playUrl(url: string): void {
   if (playerPlugin()) { playNativePlayer(url); return; }
   stopPlayback();
-  var token = playToken;
+  const token = playToken;
   playFailed = false;
   showVideoMsg('Загрузка потока…', false);
-  var looksHls = /\.m3u8(\?|#|$)/i.test(url);
+  const looksHls = /\.m3u8(\?|#|$)/i.test(url);
   if (looksHls && hlsAvailable()) startHls(url, token, true);
   else startNative(url, token, hlsAvailable());
 }
-var nativeListenerReady = false;
+let nativeListenerReady: boolean = false;
 /** Registers the native player state listener once to update buffering, playing, and error UI. */
-function ensureNativeListener(np) {
+function ensureNativeListener(np: IptvPlayerPlugin | null): void {
   if (nativeListenerReady || !np) return;
   nativeListenerReady = true;
-  np.addListener('state', function (ev) {
+  np.addListener('state', function (ev: NativePlayerEvent): void {
     if (!ev || !state.current) return;
     if (ev.state === 'buffering') showVideoMsg('Буферизация…', false);
     else if (ev.state === 'playing') { hasPlayed = true; hideVideoMsg(); updateOsdState(); }
@@ -1371,31 +1377,32 @@ function ensureNativeListener(np) {
   });
 }
 /** Sends video-box bounds in physical pixels to the native player when a channel is selected; rejected updates are ignored. */
-function syncPlayerBounds() {
-  var np = playerPlugin();
+function syncPlayerBounds(): void {
+  const np = playerPlugin();
   if (!np || !state.current) return;
-  var r = videoBox.getBoundingClientRect();
-  var dpr = window.devicePixelRatio || 1;
+  const r = videoBox.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
   np.setBounds({
     x: Math.round(r.left * dpr), y: Math.round(r.top * dpr),
     w: Math.round(r.width * dpr), h: Math.round(r.height * dpr)
-  }).catch(function () { /* ignore */ });
+  }).catch(function (): void { /* ignore */ });
 }
 /** Starts a native stream with the configured buffer and bounds; rejected play requests show an error if a channel is still selected. */
-function playNativePlayer(url) {
-  var np = playerPlugin();
+function playNativePlayer(url: string): void {
+  // Called only after playUrl has obtained the cached native player bridge.
+  const np = playerPlugin()!;
   stopPlayback();
   playFailed = false;
   showVideoMsg('Загрузка потока…', false);
   ensureNativeListener(np);
   requestAnimationFrame(syncPlayerBounds);
-  np.setVisible({ visible: true }).catch(function () { /* ignore */ });
-  np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e) {
+  np.setVisible({ visible: true }).catch(function (): void { /* ignore */ });
+  np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e: unknown): void {
     if (state.current) showVideoMsg('Не удалось воспроизвести поток (' + errMsg(e) + ')', true);
   });
 }
 /** Selects a channel, saves its URL, clears user pause, refreshes channel/EPG UI, and starts its stream. Synchronous playback setup errors propagate. */
-function playChannel(ch) {
+function playChannel(ch: Channel): void {
   state.current = ch;
   userPaused = false;
   lsSet(LS_LAST, ch.url);
@@ -1406,9 +1413,9 @@ function playChannel(ch) {
   scheduleEpgRefresh();
   playUrl(ch.url);
 }
-function togglePause() {
+function togglePause(): void {
   if (!state.current) return;
-  var np = playerPlugin();
+  const np = playerPlugin();
   if (np) {
     if (userPaused) { userPaused = false; np.resume(); }
     else { userPaused = true; np.pause(); }
@@ -1418,16 +1425,16 @@ function togglePause() {
   if (state.mode === 'player') showOsd();
 }
 /** Plays the channel delta positions away in the filtered view with wraparound; if the current channel is absent, selects an end by direction. */
-function zap(delta) {
-  var len = state.view.length;
+function zap(delta: number): void {
+  const len = state.view.length;
   if (!len) return;
-  var idx = state.view.indexOf(state.current);
+  let idx = (state.current ? state.view.indexOf(state.current) : -1);
   idx = idx < 0 ? (delta > 0 ? 0 : len - 1) : (idx + delta + len) % len;
   playChannel(state.view[idx]);
   showOsd();
 }
-video.addEventListener('playing', function () { hasPlayed = true; hideVideoMsg(); });
-video.addEventListener('waiting', function () {
+video.addEventListener('playing', function (): void { hasPlayed = true; hideVideoMsg(); });
+video.addEventListener('waiting', function (): void {
   if (!state.current || playFailed) return;
   showVideoMsg('Буферизация…', false);
   // Подвисание: ставим на паузу и ждём, пока снова накопится заданный буфер
@@ -1440,14 +1447,14 @@ video.addEventListener('pause', updateOsdState);
 video.addEventListener('play', updateOsdState);
 
 /* ================= OSD и экран плеера ================= */
-function updateOsdState() {
+function updateOsdState(): void {
   if (playerPlugin()) { osdState.textContent = userPaused ? 'Пауза' : ''; return; }
   osdState.textContent = userPaused ? '\u23F8 Пауза' : '';
 }
 /** Shows current channel and EPG details and schedules hiding after 4.5 seconds; no-ops without a current channel. */
-function showOsd() {
+function showOsd(): void {
   if (!state.current) return;
-  var idx = state.view.indexOf(state.current);
+  const idx = (state.current ? state.view.indexOf(state.current) : -1);
   osdNum.textContent = idx >= 0 ? (idx + 1) + ' / ' + state.view.length : '';
   osdName.textContent = state.current.name;
   osdGroup.textContent = state.current.group;
@@ -1455,19 +1462,19 @@ function showOsd() {
   epgPaintAll();
   osd.classList.add('show');
   clearTimeout(osdTimer);
-  osdTimer = setTimeout(function () { hideOsd(false); }, 4500);
+  osdTimer = window.setTimeout(function (): void { hideOsd(false); }, 4500);
 }
 /** Hides playback controls unless paused or a guide/favorites panel is open; a truthy force overrides those conditions. */
-function hideOsd(force) {
+function hideOsd(force: boolean): void {
   if ((userPaused || guideOpen() || favOpen()) && !force) return;      // на паузе или с открытой программой панель остаётся
   clearTimeout(osdTimer);
   osd.classList.remove('show');
 }
-function toggleControls() {
+function toggleControls(): void {
   if (osd.classList.contains('show')) hideOsd(true); else showOsd();
 }
 /** Enters the full-screen player layout for the current channel and schedules native bounds synchronization. */
-function enterPlayer() {
+function enterPlayer(): void {
   if (state.mode === 'player' || !state.current) return;
   state.mode = 'player';
   document.body.classList.add('player');
@@ -1475,7 +1482,7 @@ function enterPlayer() {
   requestAnimationFrame(syncPlayerBounds);
 }
 /** Returns from player mode to the channel menu, closes player panels, and restores navigation focus while playback continues. */
-function showMenu() {
+function showMenu(): void {
   if (state.mode !== 'player') return;
   state.mode = 'menu';
   document.body.classList.remove('player');
@@ -1484,18 +1491,18 @@ function showMenu() {
   hideOsd(true);
   if (state.group === GROUP_FAV) { computeView(); renderGrid(true); }
   requestAnimationFrame(syncPlayerBounds);
-  setFocus(cardMap.get(state.current) || videoBox);
+  setFocus((state.current ? cardMap.get(state.current) : undefined) || videoBox);
 }
 
 /* ================= Кнопка «Назад» ================= */
-var lastBackAt = 0, lastBackHandled = 0;
-function exitApp() {
-  var app = appPlugin();
+let lastBackAt: number = 0, lastBackHandled: number = 0;
+function exitApp(): void {
+  const app = appPlugin();
   if (app && app.exitApp) app.exitApp(); else { try { window.close(); } catch (e) { /* ignore */ } }
 }
 /** Handles Back at most once per 250 ms, closing overlays or player mode first; in the menu, two presses within two seconds request exit. */
-function handleBack() {
-  var t = Date.now();
+function handleBack(): void {
+  const t = Date.now();
   if (t - lastBackHandled < 250) return;   // одно нажатие не должно обработаться дважды
   lastBackHandled = t;
   if (pinpadOpen()) { pinClose(); return; }
@@ -1503,54 +1510,55 @@ function handleBack() {
   if (libraryOpen()) { closeLibrary(); return; }
   if (settingsOpen()) { closeSettings(); return; }
   if (state.mode === 'player') { showMenu(); return; }
-  var ae = document.activeElement;
+  const ae = document.activeElement;
   if (isText(ae)) { ae.blur(); return; }
   if (t - lastBackAt < 2000) { exitApp(); return; }
   lastBackAt = t;
   showToast('Нажмите «Назад» ещё раз для выхода');
 }
-(function registerBack() {
-  var app = appPlugin();
+function registerBack(): void {
+  const app = appPlugin();
   if (app && app.addListener) {
-    try { app.addListener('backButton', function () { handleBack(); }); } catch (e) { /* ignore */ }
+    try { app.addListener('backButton', function (): void { handleBack(); }); } catch (e) { /* ignore */ }
   }
-})();
+}
+registerBack();
 
 /* ================= Настройки ================= */
-function settingsOpen() { return settingsEl.classList.contains('open'); }
-var bufAtOpen = 0;
-function updateLastReload() {
-  var t = parseInt(lsGet(LS_RELOADED), 10), ent = state.entry;
+function settingsOpen(): boolean { return settingsEl.classList.contains('open'); }
+let bufAtOpen: number = 0;
+function updateLastReload(): void {
+  const t = parseInt(lsGet(LS_RELOADED), 10), ent = state.entry;
   if (!ent) lastReloadEl.textContent = 'Плейлист ещё не открыт.';
   else if (ent.kind === 'file') lastReloadEl.textContent = 'Открыт файл «' + ent.fileName + '». Кнопка «Обновить» перечитывает его из «Загрузок».';
   else lastReloadEl.textContent = t ? 'Последнее обновление: ' + new Date(t).toLocaleString('ru-RU') : 'Плейлист ещё не обновлялся.';
 }
-function syncSettingsUi() {
-  bufRange.value = settings.bufferMs;
-  bufNum.value = settings.bufferMs;
+function syncSettingsUi(): void {
+  bufRange.value = String(settings.bufferMs);
+  bufNum.value = String(settings.bufferMs);
   bufVal.textContent = settings.bufferMs + ' мс';
   autoChk.checked = settings.autoReload;
-  hoursNum.value = settings.reloadHours;
+  hoursNum.value = String(settings.reloadHours);
   updateLastReload();
   renderEpgInfo();
   renderServerUi();
   syncAutoStartUi();
 }
 /** Reads native autostart state when supported; disables the control if unavailable and ignores read failures. */
-function syncAutoStartUi() {
-  var n = native();
+function syncAutoStartUi(): void {
+  const n = native();
   if (!n || !n.getAutoStart) { autoStartChk.disabled = true; autoStartChk.checked = false; return; }
   autoStartChk.disabled = false;
-  n.getAutoStart().then(function (r) { autoStartChk.checked = !!(r && r.on); }).catch(function () { /* ignore */ });
+  n.getAutoStart().then(function (r: { on: boolean; }): void { autoStartChk.checked = !!(r && r.on); }).catch(function (): void { /* ignore */ });
 }
 /** Parses and saves a buffer duration in milliseconds, clamped to 0–7,000; invalid input retains the current value. */
-function setBuffer(v) {
+function setBuffer(v: string | number): void {
   settings.bufferMs = toInt(v, settings.bufferMs, 0, 7000);
   lsSet(LS_BUF, String(settings.bufferMs));
   syncSettingsUi();
 }
 /** Opens settings and focuses the buffer control, recording its value so closing can apply a changed buffer to playback. */
-async function openSettings() {
+async function openSettings(): Promise<void> {
   if (libraryOpen()) closeLibrary();
   bufAtOpen = settings.bufferMs;
   syncSettingsUi();
@@ -1559,71 +1567,71 @@ async function openSettings() {
   refreshServerStatus();
 }
 /** Closes settings, restores button focus, and restarts the current channel if the buffer changed while open. */
-function closeSettings() {
+function closeSettings(): void {
   if (!settingsOpen()) return;
   settingsEl.classList.remove('open');
   setFocus(settingsBtn, false);
   if (settings.bufferMs !== bufAtOpen && state.current) playChannel(state.current);   // применить новый буфер сразу
 }
-bufRange.addEventListener('input', function () { setBuffer(bufRange.value); });
-bufNum.addEventListener('change', function () { setBuffer(bufNum.value); });
-autoChk.addEventListener('change', function () {
+bufRange.addEventListener('input', function (): void { setBuffer(bufRange.value); });
+bufNum.addEventListener('change', function (): void { setBuffer(bufNum.value); });
+autoChk.addEventListener('change', function (): void {
   settings.autoReload = autoChk.checked;
   lsSet(LS_AUTO, settings.autoReload ? '1' : '0');
   if (settings.autoReload) autoTick();
 });
-autoStartChk.addEventListener('change', function () {
-  var n = native();
+autoStartChk.addEventListener('change', function (): void {
+  const n = native();
   if (!n || !n.setAutoStart) return;
-  n.setAutoStart({ on: autoStartChk.checked }).then(function () {
+  n.setAutoStart({ on: autoStartChk.checked }).then(function (): void {
     showToast(autoStartChk.checked ? 'Автозапуск включён' : 'Автозапуск выключен');
-  }).catch(function () { /* ignore */ });
+  }).catch(function (): void { /* ignore */ });
 });
-hoursNum.addEventListener('change', function () {
+hoursNum.addEventListener('change', function (): void {
   settings.reloadHours = toInt(hoursNum.value, settings.reloadHours, 1, 168);
   lsSet(LS_HOURS, String(settings.reloadHours));
   syncSettingsUi();
 });
-epgChk.addEventListener('change', function () {
+epgChk.addEventListener('change', function (): void {
   epg.enabled = epgChk.checked;
   lsSet(LS_EPG, epg.enabled ? '1' : '0');
   epgReload(false);
 });
-$('epgReloadBtn').addEventListener('click', function () { epgReload(true); });
-$('epgResetBtn').addEventListener('click', function () {
+$('epgReloadBtn').addEventListener('click', function (): void { epgReload(true); });
+$('epgResetBtn').addEventListener('click', function (): void {
   epg.file = '';
   lsSet(LS_EPGFILE, '');
   showToast('Файл EPG сброшен');
   epgReload(true);
 });
-$('clearCacheBtn').addEventListener('click', async function () {
-  var n = native();
+$('clearCacheBtn').addEventListener('click', async function (): Promise<void> {
+  const n = native();
   if (!n || !n.clearCache) { showToast('Очистка кэша доступна только в приложении'); return; }
   try {
-    var r = await n.clearCache();
+    const r = await n.clearCache();
     showToast('Кэш очищен: освобождено ' + fmtSize((r && r.freed) || 0));
   } catch (e) { showToast('Не удалось очистить кэш: ' + errMsg(e), 3500); }
 });
-srvChk.addEventListener('click', function () { setServer(!srv.running); });
-srvBtn.addEventListener('click', function () { setServer(!srv.running); });
+srvChk.addEventListener('click', function (): void { setServer(!srv.running); });
+srvBtn.addEventListener('click', function (): void { setServer(!srv.running); });
 $('libClose').addEventListener('click', closeLibrary);
-$('reloadNow').addEventListener('click', function () { reloadPlaylist(true); });
+$('reloadNow').addEventListener('click', function (): void { reloadPlaylist(true); });
 $('closeSettings').addEventListener('click', closeSettings);
-settingsEl.addEventListener('click', function (e) { if (e.target === settingsEl) closeSettings(); });
-libraryEl.addEventListener('click', function (e) { if (e.target === libraryEl) closeLibrary(); });
+settingsEl.addEventListener('click', function (e: MouseEvent): void { if (e.target === settingsEl) closeSettings(); });
+libraryEl.addEventListener('click', function (e: MouseEvent): void { if (e.target === libraryEl) closeLibrary(); });
 settingsBtn.addEventListener('click', openSettings);
 libBtn.addEventListener('click', openLibrary);
-reloadBtn.addEventListener('click', function () { reloadPlaylist(true); });
-$('pinSetBtn').addEventListener('click', function () {
+reloadBtn.addEventListener('click', function (): void { reloadPlaylist(true); });
+$('pinSetBtn').addEventListener('click', function (): void {
   // смена существующего PIN требует авторизации (первоначальная установка — без неё)
   if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast('Сначала введите текущий PIN'); return; }
   pinOpen('set');
 });
-$('pinClearBtn').addEventListener('click', function () {
+$('pinClearBtn').addEventListener('click', function (): void {
   if (!parentPin) { showToast('PIN не задан'); return; }
   // снятие PIN возможно только после разблокировки или ввода текущего PIN в настройках
   if (!pinUnlocked) {
-    var p = window.prompt('Для снятия PIN введите текущий PIN (3 цифры):');
+    const p = window.prompt('Для снятия PIN введите текущий PIN (3 цифры):');
     if (p === null) return;
     if (String(p).trim() !== parentPin) { showToast('Неверный PIN'); return; }
   }
@@ -1632,15 +1640,15 @@ $('pinClearBtn').addEventListener('click', function () {
 pinCancel.addEventListener('click', pinClose);
 
 // Свайп вверх/вниз по видео — переключение каналов
-var sw = null;
-videoBox.addEventListener('touchstart', function (e) {
+let sw: Point | null = null;
+videoBox.addEventListener('touchstart', function (e: TouchEvent): void {
   if (state.mode !== 'player' || e.touches.length !== 1) { sw = null; return; }
-  var t = e.touches[0];
+  const t = e.touches[0];
   sw = { x: t.clientX, y: t.clientY };
 }, { passive: true });
-videoBox.addEventListener('touchend', function (e) {
+videoBox.addEventListener('touchend', function (e: TouchEvent): void {
   if (!sw) return;
-  var t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+  const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
   sw = null;
   if (guideOpen() || favOpen()) return;
   if (Math.abs(dy) > 70 && Math.abs(dy) > Math.abs(dx) * 1.5) {
@@ -1650,45 +1658,45 @@ videoBox.addEventListener('touchend', function (e) {
 }, { passive: true });
 
 // Долгое нажатие на канал — в избранное
-var lpTimer = null, lpStart = null;
-function cancelLongPress() { clearTimeout(lpTimer); lpTimer = null; }
-grid.addEventListener('touchstart', function (e) {
+let lpTimer: number | undefined = undefined, lpStart: Point | null = null;
+function cancelLongPress(): void { clearTimeout(lpTimer); lpTimer = undefined; }
+grid.addEventListener('touchstart', function (e: TouchEvent): void {
   lpFired = false;
-  if (e.target.closest && e.target.closest('.card .star')) { cancelLongPress(); return; }
-  var el = e.target.closest ? e.target.closest('.card') : null;
+  if ((e.target as Element).closest && (e.target as Element).closest<NavElement>('.card .star')) { cancelLongPress(); return; }
+  const el = (e.target as Element).closest ? (e.target as Element).closest<NavElement>('.card') : null;
   if (!el || !el._channel || e.touches.length !== 1) { cancelLongPress(); return; }
-  var t = e.touches[0];
+  const t = e.touches[0];
   lpStart = { x: t.clientX, y: t.clientY };
   cancelLongPress();
-  lpTimer = setTimeout(function () { lpTimer = null; lpFired = true; toggleFav(el._channel); }, 550);
+  lpTimer = window.setTimeout(function (): void { lpTimer = undefined; lpFired = true; toggleFav(el._channel); }, 550);
 }, { passive: true });
-grid.addEventListener('touchmove', function (e) {
+grid.addEventListener('touchmove', function (e: TouchEvent): void {
   if (!lpTimer || !lpStart) return;
-  var t = e.touches[0];
+  const t = e.touches[0];
   if (Math.abs(t.clientX - lpStart.x) > 12 || Math.abs(t.clientY - lpStart.y) > 12) cancelLongPress();
 }, { passive: true });
 grid.addEventListener('touchend', cancelLongPress, { passive: true });
 grid.addEventListener('touchcancel', cancelLongPress, { passive: true });
-grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+grid.addEventListener('contextmenu', function (e: MouseEvent): void { e.preventDefault(); });
 // Тап по звёздочке на карточке — вкл/выкл избранное
-grid.addEventListener('click', function (e) {
-  var st = e.target.closest ? e.target.closest('.card .star') : null;
+grid.addEventListener('click', function (e: MouseEvent): void {
+  const st = (e.target as Element).closest ? (e.target as Element).closest<NavElement>('.card .star') : null;
   if (!st) return;
-  var card = st.closest('.card');
+  const card = st.closest<NavElement>('.card');
   if (card && card._channel) { e.preventDefault(); e.stopPropagation(); toggleFav(card._channel); }
 });
 
 /* ================= D-Pad навигация ================= */
 /** Returns visible navigation targets within the first open overlay, or the whole document if none is open. */
-function navItems() {
-  var root = document.querySelector('.overlay.open') || document;
-  return Array.prototype.slice.call(root.querySelectorAll('[data-nav]')).filter(function (el) { return el.getClientRects().length > 0; });
+function navItems(): NavElement[] {
+  const root = document.querySelector('.overlay.open') || document;
+  return Array.from(root.querySelectorAll<NavElement>('[data-nav]')).filter(function (el: NavElement): boolean { return el.getClientRects().length > 0; });
 }
 /** Moves the navigation highlight and blurs another text input; scrolls the target into view unless scroll is false. */
-function setFocus(el, scroll) {
+function setFocus(el: NavElement | null | undefined, scroll?: boolean): void {
   if (!el) return;
   if (focusedEl && focusedEl !== el) focusedEl.classList.remove('focused');
-  var ae = document.activeElement;
+  const ae = document.activeElement;
   if (isText(ae) && ae !== el) ae.blur();
   focusedEl = el;
   el.classList.add('focused');
@@ -1698,20 +1706,20 @@ function setFocus(el, scroll) {
   }
 }
 /** Moves the highlight left/right/up/down among visible targets, preferring candidates in the same row or column. */
-function moveFocus(dir) {
-  var items = navItems();
+function moveFocus(dir: Direction): void {
+  const items = navItems();
   if (!items.length) return;
   if (!focusedEl || items.indexOf(focusedEl) === -1) { setFocus(items[0]); return; }
-  var c = focusedEl.getBoundingClientRect();
-  var ccx = c.left + c.width / 2, ccy = c.top + c.height / 2;
-  var best = null, bestScore = Infinity;          // любой подходящий (запасной вариант)
-  var bestSame = null, bestSameScore = Infinity;  // приоритет: элемент в том же ряду/колонке
-  for (var i = 0; i < items.length; i++) {
-    var el = items[i];
+  const c = focusedEl.getBoundingClientRect();
+  const ccx = c.left + c.width / 2, ccy = c.top + c.height / 2;
+  let best: NavElement | null = null, bestScore = Infinity;          // любой подходящий (запасной вариант)
+  let bestSame: NavElement | null = null, bestSameScore = Infinity;  // приоритет: элемент в том же ряду/колонке
+  for (let i = 0; i < items.length; i++) {
+    const el = items[i];
     if (el === focusedEl) continue;
-    var r = el.getBoundingClientRect();
-    var rcx = r.left + r.width / 2, rcy = r.top + r.height / 2;
-    var primary, secondary, same;
+    const r = el.getBoundingClientRect();
+    const rcx = r.left + r.width / 2, rcy = r.top + r.height / 2;
+    let primary: number, secondary: number, same: boolean;
     if (dir === 'left' || dir === 'right') {
       if (dir === 'right' ? rcx <= ccx + 2 : rcx >= ccx - 2) continue;
       secondary = Math.abs(rcy - ccy);
@@ -1724,34 +1732,34 @@ function moveFocus(dir) {
       primary = Math.abs(rcy - ccy);
       same = Math.min(c.right, r.right) - Math.max(c.left, r.left) > 0;   // перекрытие по горизонтали — та же колонка
     }
-    var score = primary + secondary * (same ? 0.4 : 2.5);
+    const score = primary + secondary * (same ? 0.4 : 2.5);
     if (score < bestScore) { bestScore = score; best = el; }
     if (same && score < bestSameScore) { bestSameScore = score; bestSame = el; }
   }
-  var pick = bestSame || best;
+  const pick = bestSame || best;
   if (pick) setFocus(pick);
 }
 /** Activates a navigation target, using its custom action, input interaction, group selection, or channel playback behavior. */
-function activate(el) {
+function activate(el: NavElement | null): void {
   if (!el) return;
   if (el._act) { el._act(); return; }
   if (isText(el)) {
     el.focus();
-    try { var n = el.value.length; el.setSelectionRange(n, n); } catch (e) { /* ignore */ }
-  } else if (el.tagName === 'BUTTON' || el.type === 'checkbox' || el.type === 'file') {
+    try { const n = el.value.length; el.setSelectionRange(n, n); } catch (e) { /* ignore */ }
+  } else if (el.tagName === 'BUTTON' || (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'file'))) {
     el.click();
   } else if (el === videoBox) {
     if (state.current) enterPlayer(); else setStatus('Сначала выберите канал справа.', 'warn');
-  } else if (el._group !== undefined) {
+  } else if ('_group' in el && el._group !== undefined) {
     setGroup(el._group);
   } else if (el.classList.contains('more')) {
     showMore();
-  } else if (el._channel) {
+  } else if ('_channel' in el && el._channel) {
     if (state.current === el._channel && !playFailed) enterPlayer(); else playChannel(el._channel);
   }
 }
 /** Normalizes supported keyboard and TV remote keys to navigation actions, returning null for unrecognized keys. */
-function keyName(e) {
+function keyName(e: KeyboardEvent): RemoteKey {
   switch (e.key) {
     case 'ArrowUp': return 'up';
     case 'ArrowDown': return 'down';
@@ -1771,7 +1779,7 @@ function keyName(e) {
   return null;
 }
 /** Routes keyboard and TV remote actions by player, panel, or text-editing state, preventing defaults for handled navigation. */
-function onKeyDown(e) {
+function onKeyDown(e: KeyboardEvent): void {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
 
   if (e.key === 'MediaPlayPause' || e.key === 'MediaPlay' || e.key === 'MediaPause') { e.preventDefault(); togglePause(); return; }
@@ -1786,7 +1794,7 @@ function onKeyDown(e) {
 
   // Режим плеера
   if (state.mode === 'player') {
-    var pk = keyName(e);
+    const pk = keyName(e);
     if (!pk) return;
     e.preventDefault();
     if (favOpen()) {                            // панель избранного открыта
@@ -1812,7 +1820,7 @@ function onKeyDown(e) {
   }
 
   // Редактирование текста (ссылка, поиск, числа в настройках)
-  var ae = document.activeElement;
+  const ae = document.activeElement;
   if (isText(ae)) {
     if (e.key === 'Enter' || e.keyCode === 13) {
       e.preventDefault();
@@ -1833,7 +1841,7 @@ function onKeyDown(e) {
   }
 
   // Режим меню
-  var k = keyName(e);
+  const k = keyName(e);
   if (!k) return;
   e.preventDefault();
   if (k === 'back') { handleBack(); return; }
@@ -1842,44 +1850,44 @@ function onKeyDown(e) {
   else moveFocus(k);
 }
 window.addEventListener('keydown', onKeyDown, true);
-window.addEventListener('resize', function () { requestAnimationFrame(syncPlayerBounds); });
+window.addEventListener('resize', function (): void { requestAnimationFrame(syncPlayerBounds); });
 
 /* ===== Управление плеером с пульта: короткое OK — пауза, удержание OK — в избранное ===== */
-var okHoldTimer = null;
+let okHoldTimer: number | undefined = undefined;
 /** Starts a 700 ms OK hold timer to toggle the current favorite; releasing earlier is handled as pause by onKeyUp. */
-function startOkHold() {
+function startOkHold(): void {
   clearTimeout(okHoldTimer);
-  okHoldTimer = setTimeout(function () {
-    okHoldTimer = null;
+  okHoldTimer = window.setTimeout(function (): void {
+    okHoldTimer = undefined;
     if (state.current) { toggleFav(state.current); showOsd(); }
   }, 700);
 }
 /** On OK release in player mode, cancels an unexpired hold timer and toggles pause; a completed hold does not pause. */
-function onKeyUp(e) {
+function onKeyUp(e: KeyboardEvent): void {
   if (state.mode !== 'player') return;
   if (keyName(e) !== 'enter') return;
-  if (okHoldTimer) { clearTimeout(okHoldTimer); okHoldTimer = null; togglePause(); }
+  if (okHoldTimer) { clearTimeout(okHoldTimer); okHoldTimer = undefined; togglePause(); }
 }
 window.addEventListener('keyup', onKeyUp, true);
 /** Restores the menu navigation highlight after focus changes, leaving active text/file inputs and player mode alone. */
-function restoreNavFocus() {
+function restoreNavFocus(): void {
   if (state.mode === 'player') return;
-  var ae = document.activeElement;
-  if (isText(ae) || (ae && ae.tagName === 'INPUT' && ae.type === 'file')) return;
+  const ae = document.activeElement;
+  if (isText(ae) || (ae && ae instanceof HTMLInputElement && ae.type === 'file')) return;
   if (focusedEl && document.body.contains(focusedEl)) setFocus(focusedEl, false);
-  else { var it = navItems(); if (it.length) setFocus(it[0], false); }
+  else { const it = navItems(); if (it.length) setFocus(it[0], false); }
 }
-window.addEventListener('focus', function () { setTimeout(restoreNavFocus, 60); });
+window.addEventListener('focus', function (): void { window.setTimeout(restoreNavFocus, 60); });
 
 // Мышь / тач и синхронизация подсветки с реальным фокусом
-var tapEl = null, tapAt = 0;
-document.addEventListener('click', function (e) {
+let tapEl: NavElement | null = null, tapAt: number = 0;
+document.addEventListener('click', function (e: MouseEvent): void {
   // Кнопки панели плеера обрабатываются своими обработчиками: иначе после смены режима клик снова откроет полный экран
-  if (pinpadOpen() && !(e.target.closest && e.target.closest('.pinpad-panel'))) { pinClose(); return; }
-  if (e.target.closest && e.target.closest('.card .star')) return;   // звёздочку обрабатывает свой обработчик
-  if (e.target.closest && e.target.closest('#favs')) { closeFavs(); return; }
-  if (e.target.closest && e.target.closest('#guide')) {
-    var gr = e.target.closest('.grow');
+  if (pinpadOpen() && !((e.target as Element).closest && (e.target as Element).closest<NavElement>('.pinpad-panel'))) { pinClose(); return; }
+  if ((e.target as Element).closest && (e.target as Element).closest<NavElement>('.card .star')) return;   // звёздочку обрабатывает свой обработчик
+  if ((e.target as Element).closest && (e.target as Element).closest<NavElement>('#favs')) { closeFavs(); return; }
+  if ((e.target as Element).closest && (e.target as Element).closest<NavElement>('#guide')) {
+    const gr = (e.target as Element).closest<NavElement>('.grow');
     if (gr && gr._idx != null) { guideIdx = gr._idx; guidePick(); } else closeGuide();
     return;
   }
@@ -1889,11 +1897,11 @@ document.addEventListener('click', function (e) {
     return;
   }
   if (lpFired) { lpFired = false; return; }   // после долгого нажатия канал не запускаем
-  var el = e.target.closest ? e.target.closest('[data-nav]') : null;
+  const el = (e.target as Element).closest ? (e.target as Element).closest<NavElement>('[data-nav]') : null;
   if (!el) return;
   setFocus(el, false);
   if (el._channel) {                          // двойной тап по каналу — на весь экран
-    var t = Date.now();
+    const t = Date.now();
     if (tapEl === el && t - tapAt < 350) {
       tapEl = null; tapAt = 0;
       if (state.current !== el._channel || playFailed) playChannel(el._channel);
@@ -1904,29 +1912,29 @@ document.addEventListener('click', function (e) {
   }
   if (el._act || el === videoBox || el.classList.contains('more') || el._channel || el._group !== undefined) activate(el);
 });
-document.addEventListener('focusin', function (e) {
-  var el = e.target;
-  if (el && el.matches && el.matches('[data-nav]') && el !== focusedEl) setFocus(el, false);
+document.addEventListener('focusin', function (e: FocusEvent): void {
+  const el = e.target as NavElement | null;
+  if (el && 'matches' in el && el.matches('[data-nav]') && el !== focusedEl) setFocus(el, false);
 });
 
-loadBtn.addEventListener('click', function () { loadFromUrl(); });
+loadBtn.addEventListener('click', function (): void { loadFromUrl(); });
 fileInput.addEventListener('change', loadFromFile);
-searchInput.addEventListener('input', function () {
+searchInput.addEventListener('input', function (): void {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(applyFilter, 200);
+  searchTimer = window.setTimeout(applyFilter, 200);
 });
 
 // Автообновление плейлиста и телепрограммы: проверка раз в минуту и при возврате в приложение
-setInterval(function () { autoTick(); if (!document.hidden) epgRefresh(); }, 60000);
-document.addEventListener('visibilitychange', function () { if (!document.hidden) { autoTick(); epgRefresh(); setTimeout(restoreNavFocus, 60); } });
+window.setInterval(function (): void { autoTick(); if (!document.hidden) epgRefresh(); }, 60000);
+document.addEventListener('visibilitychange', function (): void { if (!document.hidden) { autoTick(); epgRefresh(); window.setTimeout(restoreNavFocus, 60); } });
 
 /* ================= Пульт Remote Supremacy (мост из нативного сервера) ================= */
 /**
  * Returns a remote-control snapshot with at most the first 800 filtered channels and their zero-based view indices.
  * Counts describe the full lists; playing indicates a selected channel, not confirmed media playback.
  */
-function remoteState() {
-  var chans = state.view.slice(0, 800).map(function (c, i) {
+function remoteState(): RemoteState {
+  const chans = state.view.slice(0, 800).map(function (c: Channel, i: number): RemoteChannel {
     return { i: i, name: c.name, group: c.group, url: c.url, playing: c === state.current, fav: favs.has(c.url) };
   });
   return {
@@ -1938,7 +1946,7 @@ function remoteState() {
     viewCount: state.view.length,
     query: searchInput.value,
     group: state.group,
-    groups: (state.groups || []).map(function (g) { return { key: g.key, label: g.label, count: g.count }; }),
+    groups: (state.groups || []).map(function (g: Group): Group { return { key: g.key, label: g.label, count: g.count }; }),
     favGroup: GROUP_FAV,
     favCount: state.channels.filter(isFav).length,
     blocked: Array.from(blockedGroups),
@@ -1948,16 +1956,16 @@ function remoteState() {
   };
 }
 /** Serializes all current channels, including hidden ones, as M3U with the header EPG URL and selected channel metadata; catch-up attributes are omitted. */
-function buildM3uText() {
-  var headAttrs = [];
+function buildM3uText(): string {
+  const headAttrs = [];
   if (headerEpgUrl) headAttrs.push('url-tvg="' + headerEpgUrl + '"');
   if (headerCatchup.mode) headAttrs.push('catchup="' + headerCatchup.mode + '"');
   if (headerCatchup.source) headAttrs.push('catchup-source="' + headerCatchup.source + '"');
   if (headerCatchup.days) headAttrs.push('catchup-days="' + headerCatchup.days + '"');
-  var head = '#EXTM3U' + (headAttrs.length ? ' ' + headAttrs.join(' ') : '');
-  var out = [head];
-  state.channels.forEach(function (c) {
-    var a = [];
+  const head = '#EXTM3U' + (headAttrs.length ? ' ' + headAttrs.join(' ') : '');
+  const out = [head];
+  state.channels.forEach(function (c: Channel): void {
+    const a = [];
     if (c.tvgId) a.push('tvg-id="' + c.tvgId + '"');
     if (c.tvgName) a.push('tvg-name="' + c.tvgName + '"');
     if (c.logo) a.push('tvg-logo="' + c.logo + '"');
@@ -1972,8 +1980,8 @@ function buildM3uText() {
   return out.join('\n') + '\n';
 }
 /** Renames the first channel matching cmd.url and refreshes the view; returns remote state or an error result if absent. */
-function remoteRename(cmd) {
-  var c = state.channels.filter(function (x) { return x.url === cmd.url; })[0];
+function remoteRename(cmd: RemoteCommand): RemoteResponse {
+  const c = state.channels.filter(function (x: Channel): boolean { return x.url === cmd.url; })[0];
   if (!c) return { ok: false, error: 'канал не найден' };
   c.name = String(cmd.name || c.name);
   c.nameLower = c.name.toLowerCase();
@@ -1981,26 +1989,26 @@ function remoteRename(cmd) {
   return remoteState();
 }
 /** Removes all channels matching cmd.url and clears a matching current selection; returns refreshed remote state or a not-found error result. */
-function remoteDelChannel(cmd) {
-  var before = state.channels.length;
-  state.channels = state.channels.filter(function (x) { return x.url !== cmd.url; });
+function remoteDelChannel(cmd: RemoteCommand): RemoteResponse {
+  const before = state.channels.length;
+  state.channels = state.channels.filter(function (x: Channel): boolean { return x.url !== cmd.url; });
   if (state.channels.length === before) return { ok: false, error: 'канал не найден' };
   if (state.current && state.current.url === cmd.url) state.current = null;
   buildGroups(); computeView(); renderGroups(); renderGrid(false);
   return remoteState();
 }
 /** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
-function remoteDelGroup(cmd) {
-  var key = (cmd.key === GROUP_NONE || cmd.key == null) ? '' : String(cmd.key);
-  var before = state.channels.length;
-  state.channels = state.channels.filter(function (x) { return (x.group || '') !== key; });
+function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
+  const key = (cmd.key === GROUP_NONE || cmd.key == null) ? '' : String(cmd.key);
+  const before = state.channels.length;
+  state.channels = state.channels.filter(function (x: Channel): boolean { return (x.group || '') !== key; });
   if (state.channels.length === before) return { ok: false, error: 'группа не найдена' };
   buildGroups(); computeView(); renderGroups(); renderGrid(false);
   return remoteState();
 }
-var remoteNote = '';
+let remoteNote: string = '';
 /** Saves an M3U edit snapshot for the open entry, silently ignoring persistence errors; no-ops without an entry. */
-function persistChannels() {
+function persistChannels(): void {
   if (!state.entry) return;
   try { lsSet('iptv.edit.' + state.entry.id, buildM3uText()); } catch (e) { /* ignore */ }
 }
@@ -2008,27 +2016,27 @@ function persistChannels() {
  * Moves channels from cmd.sources (an array or pipe-separated string of group names) into cmd.target.
  * GROUP_NONE as target means ungrouped. Persists edits and returns refreshed remote state with a moved count.
  */
-function remoteMergeGroups(cmd) {
-  var target = String(cmd.target || '');
-  var sources = cmd.sources;
+function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
+  const target = String(cmd.target || '');
+  let sources = cmd.sources;
   if (typeof sources === 'string') sources = sources.split('|').filter(Boolean);
   if (!Array.isArray(sources)) sources = [];
-  var set = {};
-  sources.forEach(function (s) { set[s] = 1; });
-  var moved = 0;
-  state.channels.forEach(function (c) {
-    var k = c.group || '';
+  const set: Record<string, number> = {};
+  sources.forEach(function (s: string): void { set[s] = 1; });
+  let moved = 0;
+  state.channels.forEach(function (c: Channel): void {
+    const k = c.group || '';
     if (set[k]) { c.group = (target === GROUP_NONE ? '' : target); c.groupLower = c.group.toLowerCase(); moved++; }
   });
   if (state.group && set[state.group === GROUP_NONE ? '' : state.group]) state.group = GROUP_ALL;
   buildGroups(); computeView(); renderGroups(); renderGrid(false);
   persistChannels();
-  var s = remoteState(); s.moved = moved; return s;
+  const s = remoteState(); s.moved = moved; return s;
 }
 /** Persists blocking for cmd.key, or unblocks it when cmd.on is false, 0, or "0"; refreshes visibility and returns remote state. */
-function remoteBlockGroup(cmd) {
-  var key = String(cmd.key || '');
-  var off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
+function remoteBlockGroup(cmd: RemoteCommand): RemoteResponse {
+  const key = String(cmd.key || '');
+  const off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
   if (off) {
     // разблокировка группы требует авторизации: pinUnlocked или корректный cmd.pin; блокировка — нет
     if (!pinUnlocked) {
@@ -2049,26 +2057,26 @@ window.RemoteAPI = {
    * { ok: false, error } results. Asynchronous loads, saves, and resets may still be pending after acknowledgment;
    * lastNote reports later save/reset messages.
    */
-  handle: function (cmd) {
+  handle: function (cmd: RemoteCommand): RemoteState | RemoteResponse {
     try {
       cmd = cmd || {};
-      var name = String(cmd.cmd || 'state');
+      const name = String(cmd.cmd || 'state');
       if (name === 'state') return remoteState();
       if (name === 'next') { zap(1); return remoteState(); }
       if (name === 'prev') { zap(-1); return remoteState(); }
       if (name === 'select') {
-        var i = parseInt(cmd.i, 10);
+        const i = parseInt(String(cmd.i), 10);
         if (isFinite(i) && state.view[i]) { playChannel(state.view[i]); return remoteState(); }
         return { ok: false, error: 'нет канала с таким индексом' };
       }
       if (name === 'open') {
-        var oi = parseInt(cmd.i, 10);
+        const oi = parseInt(String(cmd.i), 10);
         if (isFinite(oi) && state.view[oi]) { playChannel(state.view[oi]); enterPlayer(); return remoteState(); }
         return { ok: false, error: 'нет канала с таким индексом' };
       }
       if (name === 'fullscreen') { if (state.current) enterPlayer(); return remoteState(); }
       if (name === 'fav') {
-        var fc = state.channels.filter(function (x) { return x.url === cmd.url; })[0];
+        const fc = state.channels.filter(function (x: Channel): boolean { return x.url === cmd.url; })[0];
         if (fc) toggleFav(fc);
         return remoteState();
       }
@@ -2077,16 +2085,16 @@ window.RemoteAPI = {
       if (name === 'loadUrl') { urlInput.value = cmd.url || ''; lsSet(LS_URL, urlInput.value); loadFromUrl(); return { ok: true, note: 'гружу плейлист по ссылке' }; }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
       if (name === 'openFile') { if (cmd.name) openDownloadFile(cmd.name); return { ok: true, note: 'открываю файл ' + (cmd.name || '') }; }
-      if (name === 'rename') { var r1 = remoteRename(cmd); persistChannels(); return r1; }
-      if (name === 'delChannel') { var r2 = remoteDelChannel(cmd); persistChannels(); return r2; }
-      if (name === 'delGroup') { var r3 = remoteDelGroup(cmd); persistChannels(); return r3; }
+      if (name === 'rename') { const r1 = remoteRename(cmd); persistChannels(); return r1; }
+      if (name === 'delChannel') { const r2 = remoteDelChannel(cmd); persistChannels(); return r2; }
+      if (name === 'delGroup') { const r3 = remoteDelGroup(cmd); persistChannels(); return r3; }
       if (name === 'mergeGroups') return remoteMergeGroups(cmd);
       if (name === 'blockGroup') return remoteBlockGroup(cmd);
       if (name === 'setPin') {
-        var newPin = String(cmd.pin || '').replace(/[^0-9]/g, '').slice(0, 3);
+        const newPin = String(cmd.pin || '').replace(/[^0-9]/g, '').slice(0, 3);
         // смена/снятие существующего PIN требует авторизации: pinUnlocked или текущий PIN в cmd.current
         if (parentPin && !pinUnlocked) {
-          var cur = String(cmd.current != null ? cmd.current : '').replace(/[^0-9]/g, '');
+          const cur = String(cmd.current != null ? cmd.current : '').replace(/[^0-9]/g, '');
           if (cur !== parentPin) return { ok: false, error: 'требуется текущий PIN' };
         }
         parentPin = newPin; lsSet('iptv.pin', parentPin); return { ok: true, pinSet: !!parentPin };
@@ -2096,30 +2104,31 @@ window.RemoteAPI = {
       if (name === 'clearEdits') { if (state.entry) lsSet('iptv.edit.' + state.entry.id, ''); return { ok: true }; }
   if (name === 'lastNote') { return { ok: true, note: remoteNote }; }
   if (name === 'saveFile') {
-    var se = state.entry, sn = native();
+    const se = state.entry, sn = native();
     if (!se || se.kind !== 'file' || !se.fileName) return { ok: false, error: 'Текущий плейлист не файл на устройстве. Для ссылки используйте «Скачать текущий».' };
     if (!sn || !sn.writeFile) return { ok: false, error: 'Запись файла недоступна' };
     remoteNote = '';
     sn.writeFile({ name: se.fileName, text: buildM3uText() })
-      .then(function () { remoteNote = 'Сохранено в файл ' + se.fileName; showToast('Сохранено в файл'); })
-      .catch(function (er) { remoteNote = 'Не удалось сохранить: ' + errMsg(er); showToast('Не удалось сохранить файл'); });
+      .then(function (): void { remoteNote = 'Сохранено в файл ' + se.fileName; showToast('Сохранено в файл'); })
+      .catch(function (er: unknown): void { remoteNote = 'Не удалось сохранить: ' + errMsg(er); showToast('Не удалось сохранить файл'); });
     return { ok: true, note: 'Записываю в ' + se.fileName + '…' };
   }
   if (name === 'resetEdits') {
-    var re = state.entry;
+    const re = state.entry;
     if (!re) return { ok: false, error: 'Нет открытого плейлиста' };
     lsSet('iptv.edit.' + re.id, '');
     remoteNote = '';
-    (async function () {
+    async function resetEdits(entry: PlaylistIdentity): Promise<void> {
       try {
-        var ent = await libGet(re.id), nn = native();
-        if (ent && ent.kind === 'file' && ent.text && re.fileName && nn && nn.writeFile) {
-          await nn.writeFile({ name: re.fileName, text: ent.text });
+        const ent = await libGet(entry.id), nn = native();
+        if (ent && ent.kind === 'file' && ent.text && entry.fileName && nn && nn.writeFile) {
+          await nn.writeFile({ name: entry.fileName, text: ent.text });
         }
       } catch (x) { /* файл не восстановлен, сбросим хотя бы кэш */ }
-      await openEntry(re.id, true);
+      await openEntry(entry.id, true);
       remoteNote = 'Правки сброшены, исходный плейлист восстановлен';
-    })();
+    }
+    resetEdits(re);
     return { ok: true, note: 'Сбрасываю правки…' };
   }
       if (name === 'setEpg') {
@@ -2130,25 +2139,25 @@ window.RemoteAPI = {
         return { ok: true, note: 'EPG: ' + (cmd.url || 'выключен') };
       }
       return { ok: false, error: 'неизвестная команда: ' + name };
-    } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+    } catch (e) { return { ok: false, error: String((e && typeof e === 'object' && 'message' in e && e.message) || e) }; }
   }
 };
 
 /* ================= Старт ================= */
-(async function boot() {
-  var savedUrl = lsGet(LS_URL);
+async function boot(): Promise<void> {
+  const savedUrl = lsGet(LS_URL);
   if (savedUrl) urlInput.value = savedUrl;
   syncSettingsUi();
   renderGroups();
   setFocus(urlInput, false);
-  setTimeout(renderQr, 2000);
+  window.setTimeout(renderQr, 2000);
   if (playerPlugin()) { document.documentElement.classList.add('native'); document.body.classList.add('native'); ensureNativeListener(playerPlugin()); }
   if (native()) {
     if (lsGet(LS_SRV) === '1') setServer(true); else refreshServerStatus();
   }
-  var entry = null, id = lsGet(LS_ENTRY);
+  let entry: PlaylistEntry | undefined | null = null, id = lsGet(LS_ENTRY);
   if (id) { try { entry = await libGet(id); } catch (e) { entry = null; } }
   if (entry) await openEntry(entry.id, true);
   else if (savedUrl) loadFromUrl();
-})();
-})();
+}
+boot();
