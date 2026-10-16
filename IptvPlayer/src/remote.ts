@@ -23,11 +23,12 @@ let lastState: RemoteResponse | null = null;
 /** Доступ к заблокированности из обработчиков кнопок PIN. */
 function s_pinState(): { locked: boolean; pinSet: boolean } { return { locked: !!(lastState && lastState.locked), pinSet: !!(lastState && lastState.pinSet) }; }
 /** Удаление группы: скрытые под PIN требуют подтверждения PIN (из поля пульта или через prompt). */
-function askDelGroup(gr: Group, s: RemoteResponse): void {
+function askDelGroup(gr: Group, s: RemoteResponse | null): void {
   if (!confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) return;
-  const isBlocked = (s.blocked || []).indexOf(gr.key) !== -1;
+  const isBlocked = !!(s && (s.blocked || []).indexOf(gr.key) !== -1);
   let q = 'cmd=delGroup&key=' + encodeURIComponent(gr.key);
-  if (isBlocked && s.locked) {
+  if (isBlocked) {
+    // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
     const p = val('pin').trim() || (window.prompt(tr('Группа скрыта под PIN. Введите PIN (3 цифры):')) || '').trim();
     if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
     q += '&pin=' + encodeURIComponent(p);
@@ -199,7 +200,8 @@ function renderGroupsList(s: RemoteResponse): void {
     bl.onclick = function (): void {
       // для снятия блокировки нужен PIN: из поля пульта, а если пусто — спрашиваем через prompt (плеер проверит cmd.pin)
       let p = '';
-      if (isB && s.locked) {
+      if (isB) {
+        // блокировка уже снята с показа, но PIN всё равно нужен: плеер сверит его со своим (cmd.pin)
         p = val('pin').trim();
         if (!p) p = (window.prompt(tr('Группа скрыта под PIN. Введите PIN (3 цифры):')) || '').trim();
         if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
@@ -209,7 +211,7 @@ function renderGroupsList(s: RemoteResponse): void {
     };
     const dl = el('button', 'mini del', '\u2715');
     dl.title = tr('Удалить группу');
-    dl.onclick = function (): void { askDelGroup(gr, s); };
+    dl.onclick = function (): void { askDelGroup(gr, lastState); };
     row.appendChild(bl); row.appendChild(dl);
     box.appendChild(row);
     const opt = document.createElement('option'); opt.value = gr.key; opt.textContent = gr.label; sel.appendChild(opt);
@@ -223,28 +225,38 @@ $('mmerge').onclick = function (): void {
   if (!srcs.length) { $('gmsg').textContent = tr('Отметьте группы для объединения'); return; }
   if (srcs.indexOf(target) !== -1) { $('gmsg').textContent = tr('Целевая группа не может быть среди источников'); return; }
   if (!confirm(tr('Объединить {0} групп в «{1}»?', String(srcs.length), target))) return;
-  runCmd('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|')), function (s: RemoteResponse): void {
+  // если среди отмеченных есть скрытая под PIN группа, объединение сдвинуло бы её каналы без авторизации — спрашиваем PIN
+  const blockedSrc = srcs.some(function (k: string): boolean { return ((lastState && lastState.blocked) || []).indexOf(k) !== -1; });
+  let pinQ = '';
+  if (blockedSrc) {
+    const p = val('pin').trim() || (window.prompt(tr('Среди отмеченных групп есть скрытые под PIN. Введите PIN (3 цифры):')) || '').trim();
+    if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+    pinQ = '&pin=' + encodeURIComponent(p);
+  }
+  runCmd('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|')) + pinQ, function (s: RemoteResponse): void {
     $('gmsg').textContent = tr('Объединено каналов: {0}', (s && s.moved) || 0); render(s);
   });
 };
 $('pinset').onclick = function (): void {
   const p = val('pin').trim();
   if (!/^\d{3}$/.test(p)) { $('gmsg').textContent = tr('PIN должен состоять из 3 цифр'); return; }
-  // смена существующего PIN требует подтверждения: берём текущий PIN из поля (плеер проверит cmd.current)
-  const cur = s_pinState.locked ? p : '';
+  // смена существующего PIN требует подтверждения: спрашиваем текущий PIN (плеер проверит cmd.current)
+  let cur = '';
+  if (s_pinState().pinSet) {
+    cur = val('pin').trim();
+    if (!cur) cur = (window.prompt(tr('Для смены PIN введите текущий PIN (3 цифры):')) || '').trim();
+    if (!cur) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется текущий PIN')); return; }
+  }
   runCmd('cmd=setPin&pin=' + encodeURIComponent(p) + '&current=' + encodeURIComponent(cur), function (s: RemoteResponse): void {
     $('gmsg').textContent = 'PIN ' + (s && s.pinSet ? tr('задан') : tr('снят'));
     render(s);
   });
 };
 $('pinclear').onclick = function (): void {
-  // снятие PIN = setPin с пустым значением; если пульт заблокирован, текущий PIN спрашиваем (плеер проверит cmd.current)
-  let cur = '';
-  if (s_pinState.locked) {
-    cur = val('pin').trim();
-    if (!cur) cur = (window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):')) || '').trim();
-    if (!cur) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
-  }
+  // снятие PIN = setPin с пустым значением; плеер всегда требует текущий PIN (cmd.current)
+  let cur = val('pin').trim();
+  if (!cur) cur = (window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):')) || '').trim();
+  if (!cur) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется текущий PIN')); return; }
   runCmd('cmd=setPin&pin=&current=' + encodeURIComponent(cur), function (s: RemoteResponse): void {
     $('gmsg').textContent = 'PIN ' + (s && s.pinSet ? tr('задан') : tr('снят'));
     render(s);

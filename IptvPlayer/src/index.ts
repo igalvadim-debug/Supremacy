@@ -2240,6 +2240,18 @@ function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
   let sources = cmd.sources;
   if (typeof sources === 'string') sources = sources.split('|').filter(Boolean);
   if (!Array.isArray(sources)) sources = [];
+  // перемещение каналов из скрытой под PIN группы требует авторизации — иначе пульт мог бы «слить» защищённую группу без PIN
+  const srcBlocked = sources.some(function (k: string): boolean { return blockedGroups.has(k); });
+  if (srcBlocked && !pinUnlocked) {
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
+  // нельзя перелить каналы в скрытую группу без PIN — это обошло бы защиту (каналы исчезли бы из меню)
+  if (target && blockedGroups.has(target) && !pinUnlocked) {
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
   const set: Record<string, number> = {};
   sources.forEach(function (s: string): void { set[s] = 1; });
   let moved = 0;
