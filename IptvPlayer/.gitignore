@@ -4,7 +4,12 @@ jspm_packages/
 web_modules/
 
 # Build-Ordner und generierte Web-Assets
-www/
+www/*
+!www/js/
+www/js/*
+!www/js/player.js
+!www/js/remote.js
+!www/js/server-page.js
 dist/
 build/
 out/
