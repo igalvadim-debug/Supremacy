@@ -147,6 +147,8 @@ try { (JSON.parse(lsGet('iptv.blocked') || '[]') as unknown[]).forEach(function 
 function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
 let parentPin: string = lsGet('iptv.pin') || '';
 let pinUnlocked: boolean = false;
+/** true, если в этом плейлисте уже есть заблокированные группы — разблокировка без PIN не допускается. */
+function hasBlockedGroups(): boolean { return blockedGroups.size > 0; }
 
 /* ================= Состояние ================= */
 const state: PlayerState = { channels: [], view: [], groups: [], group: lsGet(LS_GROUP), current: null, entry: null, mode: 'menu', renderCount: PAGE_SIZE };
@@ -760,8 +762,12 @@ function makeChip(key: string, label: string, count: number): NavElement {
 }
 /** Opens PIN setup if unset, relocks visible groups if unlocked, or prompts for the existing PIN. */
 function armUnlock(): void {
-  if (!parentPin) { pinOpen('set'); return; }
-  if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return; }
+  if (!parentPin) {
+    // без заданного PIN блокировка бессмысленна: сначала задаём PIN
+    pinOpen('set');
+    return;
+  }
+  if (pinUnlocked) { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return; }
   pinOpen('unlock');
 }
 /* ================= Экранный PIN-пад (3 цифры) ================= */
@@ -824,11 +830,11 @@ function pinSubmit(): void {
   const v = pinBuf;
   if (pinMode === 'set') {
     parentPin = v; lsSet('iptv.pin', v); pinUnlocked = true; pinFailCount = 0; pinBlockedUntil = 0;
-    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN задан'));
+    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('PIN задан'));
   } else if (verifyPin(v)) {
     pinUnlocked = true; pinClose(); buildGroups();
     if (state.group && blockedGroups.has(state.group)) state.group = GROUP_ALL;
-    computeView(); renderGroups(); renderGrid(false); showToast(tr('Скрытые группы показаны'));
+    computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('Скрытые группы показаны'));
   } else {
     pinBuf = ''; pinRenderDots();
     if (pinFailCount >= PIN_MAX_FAILS) {
@@ -1725,8 +1731,17 @@ function syncSettingsUi(): void {
   hoursNum.value = String(settings.reloadHours);
   updateLastReload();
   renderEpgInfo();
+  renderPinStatus();
   renderServerUi();
   syncAutoStartUi();
+}
+/** Shows the current parental-PIN state in settings so the buttons reflect reality. */
+function renderPinStatus(): void {
+  const el = document.getElementById('pinStatus');
+  if (!el) return;
+  if (!parentPin) el.textContent = tr('PIN не задан');
+  else if (pinUnlocked) el.textContent = tr('🔓 PIN задан, скрытые группы показаны ({0})', blockedGroups.size);
+  else el.textContent = tr('🔒 PIN задан, скрыто групп: {0}', blockedGroups.size);
 }
 /** Reads native autostart state when supported; disables the control if unavailable and ignores read failures. */
 function syncAutoStartUi(): void {
@@ -1813,13 +1828,15 @@ $('pinSetBtn').addEventListener('click', function (): void {
 });
 $('pinClearBtn').addEventListener('click', function (): void {
   if (!parentPin) { showToast(tr('PIN не задан')); return; }
+  // под снятым PIN заблокированные группы перестанут скрываться, поэтому сначала нужно снять все блокировки
+  if (hasBlockedGroups()) { showToast(tr('Сначала разблокируйте все скрытые группы')); return; }
   // снятие PIN возможно только после разблокировки или ввода текущего PIN в настройках
   if (!pinUnlocked) {
     const p = window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):'));
     if (p === null) return;
     if (!verifyPin(String(p).trim())) { showToast(tr('Неверный PIN')); return; }
   }
-  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN снят'));
+  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); showToast(tr('PIN снят'));
 });
 pinCancel.addEventListener('click', pinClose);
 
@@ -2179,16 +2196,33 @@ function remoteDelChannel(cmd: RemoteCommand): RemoteResponse {
   state.channels = state.channels.filter(function (x: Channel): boolean { return x.url !== cmd.url; });
   if (state.channels.length === before) return { ok: false, error: 'канал не найден' };
   if (state.current && state.current.url === cmd.url) state.current = null;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 /** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
 function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
-  const key = (cmd.key === GROUP_NONE || cmd.key == null) ? '' : String(cmd.key);
+  // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
+  const rawKey = cmd.key == null ? GROUP_NONE : String(cmd.key);
+  if (blockedGroups.has(rawKey) && !pinUnlocked) {
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
+    pinUnlocked = true;
+  }
+  const key = (rawKey === GROUP_NONE) ? '' : rawKey;
   const before = state.channels.length;
   state.channels = state.channels.filter(function (x: Channel): boolean { return (x.group || '') !== key; });
   if (state.channels.length === before) return { ok: false, error: 'группа не найдена' };
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  blockedGroups['delete'](key);
+  blockedGroups['delete'](rawKey);
+  saveBlocked();
+  // из избранного (ключ — url канала) убираем url удалённых каналов, иначе счётчик «★ Избранное» завышается
+  const keptUrls: Record<string, number> = {};
+  state.channels.forEach(function (x: Channel): void { keptUrls[x.url] = 1; });
+  favs.forEach(function (u: string): void { if (!keptUrls[u]) favs['delete'](u); });
+  saveFavs();
+  if (state.current && (state.current.group || '') === key) state.current = null;
+  if (state.group === rawKey) state.group = GROUP_ALL;
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 let remoteNote: string = '';
@@ -2214,7 +2248,7 @@ function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
     if (set[k]) { c.group = (target === GROUP_NONE ? '' : target); c.groupLower = c.group.toLowerCase(); moved++; }
   });
   if (state.group && set[state.group === GROUP_NONE ? '' : state.group]) state.group = GROUP_ALL;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   persistChannels();
   const s = remoteState(); s.moved = moved; return s;
 }
@@ -2223,16 +2257,20 @@ function remoteBlockGroup(cmd: RemoteCommand): RemoteResponse {
   const key = String(cmd.key || '');
   const off = (cmd.on === false || cmd.on === '0' || cmd.on === 0);
   if (off) {
-    // разблокировка группы требует авторизации: pinUnlocked или корректный cmd.pin; блокировка — нет
-    if (parentPin && !pinUnlocked) {
+    // снятие блокировки с группы требует авторизации PIN, если под защитой уже есть скрытые группы
+    if (hasBlockedGroups() && !pinUnlocked) {
       if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
       pinUnlocked = true;
     }
     blockedGroups['delete'](key);
-  } else blockedGroups.add(key);
+  } else {
+    // блокировка без заданного PIN бессмысленна — сначала требуется установить PIN
+    if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
+    blockedGroups.add(key);
+  }
   saveBlocked();
   if (state.group && blockedGroups.has(state.group) && !pinUnlocked) state.group = GROUP_ALL;
-  buildGroups(); computeView(); renderGroups(); renderGrid(false);
+  buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 window.RemoteAPI = {
@@ -2267,9 +2305,18 @@ window.RemoteAPI = {
       }
       if (name === 'search') { searchInput.value = cmd.q || ''; applyFilter(); return remoteState(); }
       if (name === 'group') { setGroup(cmd.key || GROUP_ALL); return remoteState(); }
-      if (name === 'loadUrl') { urlInput.value = cmd.url || ''; lsSet(LS_URL, urlInput.value); loadFromUrl(); return { ok: true, note: 'гружу плейлист по ссылке' }; }
+      if (name === 'loadUrl') {
+        const lu = String(cmd.url || '').trim();
+        if (!/^https?:\/\//i.test(lu)) return { ok: false, error: 'ссылка должна начинаться с http:// или https://' };
+        urlInput.value = lu; lsSet(LS_URL, lu); loadFromUrl();
+        return { ok: true, note: 'гружу плейлист по ссылке' };
+      }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
-      if (name === 'openFile') { if (cmd.name) openDownloadFile(cmd.name); return { ok: true, note: 'открываю файл ' + (cmd.name || '') }; }
+      if (name === 'openFile') {
+        if (!cmd.name) return { ok: false, error: 'не указано имя файла' };
+        openDownloadFile(cmd.name);
+        return { ok: true, note: 'открываю файл ' + cmd.name };
+      }
       if (name === 'rename') { const r1 = remoteRename(cmd); persistChannels(); return r1; }
       if (name === 'delChannel') { const r2 = remoteDelChannel(cmd); persistChannels(); return r2; }
       if (name === 'delGroup') { const r3 = remoteDelGroup(cmd); persistChannels(); return r3; }
@@ -2282,10 +2329,19 @@ window.RemoteAPI = {
           const cur = String(cmd.current != null ? cmd.current : '');
           if (!verifyPin(cur)) return { ok: false, error: 'требуется текущий PIN' };
         }
-        parentPin = newPin; lsSet('iptv.pin', parentPin); pinFailCount = 0; pinBlockedUntil = 0; return { ok: true, pinSet: !!parentPin };
+        // снятие PIN невозможно, если под защитой остались заблокированные группы — иначе они перестанут скрываться
+        if (!newPin && hasBlockedGroups()) return { ok: false, error: 'сначала разблокируйте все скрытые группы' };
+        parentPin = newPin; lsSet('iptv.pin', parentPin); pinFailCount = 0; pinBlockedUntil = 0;
+        if (!parentPin) pinUnlocked = false;
+        buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
+        return { ok: true, pinSet: !!parentPin };
       }
-      if (name === 'unlock') { if (parentPin && verifyPin(cmd.pin)) { pinUnlocked = true; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); } return { ok: false, error: 'неверный PIN' }; }
-      if (name === 'lock') { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); return remoteState(); }
+      if (name === 'unlock') {
+        if (!parentPin) return { ok: false, error: 'PIN не задан' };
+        if (verifyPin(cmd.pin)) { pinUnlocked = true; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return remoteState(); }
+        return { ok: false, error: 'неверный PIN' };
+      }
+      if (name === 'lock') { pinUnlocked = false; buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus(); return remoteState(); }
       if (name === 'clearEdits') { if (state.entry) lsSet('iptv.edit.' + state.entry.id, ''); return { ok: true }; }
   if (name === 'lastNote') { return { ok: true, note: remoteNote }; }
   if (name === 'saveFile') {

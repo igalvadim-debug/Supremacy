@@ -11,10 +11,34 @@ function api(q: string): Promise<RemoteResponse> {
 }
 /** Encodes a group key for a query parameter, preserving the empty key for all channels. */
 function groupKey(k: string): string { return k === '' ? '' : encodeURIComponent(k); }
+/** Унифицированная отправка команд с обработкой ошибок: ok:false показывает ошибку, сетевой сбой — «нет связи». */
+function runCmd(q: string, onOk: (s: RemoteResponse) => void, msgEl?: HTMLElement): void {
+  api(q).then(function (s: RemoteResponse): void {
+    if (!s || s.ok === false) { const m = msgEl || $('gmsg'); m.textContent = tr('Ошибка: {0}', trLoose((s && s.error) || tr('не удалось'))); return; }
+    onOk(s);
+  }).catch(function (): void { (msgEl || $('gmsg')).textContent = tr('Нет связи с плеером'); });
+}
+/** Последнее состояние плеера (нужно обработчикам PIN: locked/pinSet). */
+let lastState: RemoteResponse | null = null;
+/** Доступ к заблокированности из обработчиков кнопок PIN. */
+function s_pinState(): { locked: boolean; pinSet: boolean } { return { locked: !!(lastState && lastState.locked), pinSet: !!(lastState && lastState.pinSet) }; }
+/** Удаление группы: скрытые под PIN требуют подтверждения PIN (из поля пульта или через prompt). */
+function askDelGroup(gr: Group, s: RemoteResponse): void {
+  if (!confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) return;
+  const isBlocked = (s.blocked || []).indexOf(gr.key) !== -1;
+  let q = 'cmd=delGroup&key=' + encodeURIComponent(gr.key);
+  if (isBlocked && s.locked) {
+    const p = val('pin').trim() || (window.prompt(tr('Группа скрыта под PIN. Введите PIN (3 цифры):')) || '').trim();
+    if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+    q += '&pin=' + encodeURIComponent(p);
+  }
+  runCmd(q, render);
+}
 let lastTapUrl: string = '', lastTapAt: number = 0;
 /** Renders the player snapshot and channel/group actions, or displays a connection error for a missing or unsuccessful response. */
 function render(s: RemoteResponse | null): void {
   if (!s || !s.ok) { $('err').textContent = tr('Нет связи с плеером'); return; }
+  lastState = s;
   $('err').textContent = '';
   $('now').textContent = s.current ? s.current.name : tr('Канал не выбран');
   if (s.current && s.current.group) {
@@ -36,6 +60,7 @@ function render(s: RemoteResponse | null): void {
   lock.title = s.locked ? tr('Разблокировать скрытые группы') : tr('Скрыть разблокированные группы');
   lock.onclick = function (): void {
     if (!s.locked) { api('cmd=lock').then(render); return; }
+    if (!s.pinSet) { $('gmsg').textContent = tr('Сначала задайте PIN'); return; }
     const p = prompt(tr('PIN (3 цифры):')); if (p === null) return;
     api('cmd=unlock&pin=' + encodeURIComponent(p)).then(function (r: RemoteResponse): void { if (!r || !r.ok) alert(tr('Неверный PIN')); render(r); });
   };
@@ -46,7 +71,7 @@ function render(s: RemoteResponse | null): void {
     // выбор группы доступно с клавиатуры: aria-pressed отражает активный чип
     c.setAttribute('aria-pressed', s.group === gr.key ? 'true' : 'false');
     c.onclick = function (): void { api('cmd=group&key=' + groupKey(gr.key)).then(render); };
-    c.oncontextmenu = function (e: MouseEvent): boolean { e.preventDefault(); if (confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) api('cmd=delGroup&key=' + encodeURIComponent(gr.key)).then(render); return false; };
+    c.oncontextmenu = function (e: MouseEvent): boolean { e.preventDefault(); askDelGroup(gr, s); return false; };
     g.appendChild(c);
   });
   renderGroupsList(s);
@@ -92,9 +117,13 @@ $('q').oninput = function (): void {
 };
 $('plload').onclick = function (): void {
   const u = val('plurl').trim();
-  if (!u) return;
+  if (!u) { $('plmsg').textContent = tr('Введите ссылку на плейлист'); return; }
+  if (!/^https?:\/\//i.test(u)) { $('plmsg').textContent = tr('Ссылка должна начинаться с http:// или https://'); return; }
   $('plmsg').textContent = tr('Загрузка…');
-  api('cmd=loadUrl&url=' + encodeURIComponent(u)).then(function (): void { $('plmsg').textContent = tr('Плейлист загружается…'); setTimeout(poll, 3000); });
+  api('cmd=loadUrl&url=' + encodeURIComponent(u)).then(function (s: RemoteResponse): void {
+    if (s && s.ok === false) { $('plmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('не удалось'))); return; }
+    $('plmsg').textContent = tr('Плейлист загружается…'); setTimeout(poll, 3000);
+  }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
 };
 $('epgload').onclick = function (): void {
   const u = val('epgurl').trim();
@@ -127,7 +156,9 @@ $('plreset').onclick = function (): void {
     if (s && s.ok) { $('plmsg').textContent = trLoose(s.note || tr('Сбрасываю…')); showNoteLater(); setTimeout(poll, 3000); }
     else { $('plmsg').textContent = tr('Ошибка: {0}', trLoose((s && s.error) || tr('не удалось'))); }
   }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
-};  $('plup').onchange = function (): void {
+};  /** Убирает url из списка загрузки, чтобы следующая загрузка не открылась сразу после перезагрузки ТВ. */
+function stripPlUrl(): void { const pi = document.getElementById('plurl'); if (pi instanceof HTMLInputElement) pi.value = ''; }
+$('plup').onchange = function (): void {
   const f = fileAt('plup', 0);
   if (!f) return;
   $('plmsg').textContent = tr('Загрузка файла…');
@@ -136,7 +167,10 @@ $('plreset').onclick = function (): void {
     .then(function (res: UploadResponse): void {
       if (res && res.ok) {
         $('plmsg').textContent = tr('Файл загружен, открываю…');
-        api('cmd=openFile&name=' + encodeURIComponent(f.name)).then(function (): void { setTimeout(poll, 3000); });
+        api('cmd=openFile&name=' + encodeURIComponent(f.name)).then(function (s2: RemoteResponse): void {
+          if (s2 && s2.ok === false) { $('plmsg').textContent = tr('Ошибка: {0}', trLoose(s2.error || tr('не удалось открыть файл'))); return; }
+          stripPlUrl(); setTimeout(poll, 3000);
+        }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
       } else { $('plmsg').textContent = tr('Ошибка: {0}', trLoose((res && res.error) || 'upload')); }
     })
     .catch(function (): void { $('plmsg').textContent = tr('Ошибка загрузки файла'); });
@@ -161,9 +195,21 @@ function renderGroupsList(s: RemoteResponse): void {
     row.appendChild(el('div', 'g', String(gr.count)));
     const isB = (s.blocked || []).indexOf(gr.key) !== -1;
     const bl = el('button', 'mini', isB ? '\uD83D\uDD12' : '\uD83D\uDD13');
-    bl.onclick = function (): void { api('cmd=blockGroup&key=' + encodeURIComponent(gr.key) + '&on=' + (isB ? '0' : '1')).then(render); };
+    bl.title = isB ? tr('Снять блокировку группы') : tr('Скрыть группу под PIN');
+    bl.onclick = function (): void {
+      // для снятия блокировки нужен PIN: из поля пульта, а если пусто — спрашиваем через prompt (плеер проверит cmd.pin)
+      let p = '';
+      if (isB && s.locked) {
+        p = val('pin').trim();
+        if (!p) p = (window.prompt(tr('Группа скрыта под PIN. Введите PIN (3 цифры):')) || '').trim();
+        if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+      }
+      const q = 'cmd=blockGroup&key=' + encodeURIComponent(gr.key) + '&on=' + (isB ? '0' : '1') + (p ? '&pin=' + encodeURIComponent(p) : '');
+      runCmd(q, render);
+    };
     const dl = el('button', 'mini del', '\u2715');
-    dl.onclick = function (): void { if (confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) api('cmd=delGroup&key=' + encodeURIComponent(gr.key)).then(render); };
+    dl.title = tr('Удалить группу');
+    dl.onclick = function (): void { askDelGroup(gr, s); };
     row.appendChild(bl); row.appendChild(dl);
     box.appendChild(row);
     const opt = document.createElement('option'); opt.value = gr.key; opt.textContent = gr.label; sel.appendChild(opt);
@@ -172,21 +218,45 @@ function renderGroupsList(s: RemoteResponse): void {
 }
 $('mmerge').onclick = function (): void {
   const target = val('mtarget');
-  const srcs = Array.from(document.querySelectorAll<HTMLInputElement>('#glist input.mchk:checked')).map(function (c: HTMLInputElement): string | undefined { return chkKeys.get(c); }).filter(function (k: string | undefined): k is string { return k !== undefined; });
+  if (!target) { $('gmsg').textContent = tr('Выберите целевую группу'); return; }
+  const srcs = Array.from(document.querySelectorAll<HTMLInputElement>('#glist input.mchk:checked')).map(function (c: HTMLInputElement): string | undefined { return chkKeys.get(c); }).filter(function (k: string | undefined): k is string { return k !== undefined && k !== ''; });
   if (!srcs.length) { $('gmsg').textContent = tr('Отметьте группы для объединения'); return; }
-  api('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|'))).then(function (s: RemoteResponse): void { $('gmsg').textContent = tr('Объединено каналов: {0}', (s && s.moved) || 0); render(s); });
+  if (srcs.indexOf(target) !== -1) { $('gmsg').textContent = tr('Целевая группа не может быть среди источников'); return; }
+  if (!confirm(tr('Объединить {0} групп в «{1}»?', String(srcs.length), target))) return;
+  runCmd('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|')), function (s: RemoteResponse): void {
+    $('gmsg').textContent = tr('Объединено каналов: {0}', (s && s.moved) || 0); render(s);
+  });
 };
 $('pinset').onclick = function (): void {
   const p = val('pin').trim();
-  // смена/снятие существующего PIN требует подтверждения: сначала «Разблокировать», затем задать новый
-  api('cmd=setPin&pin=' + encodeURIComponent(p)).then(function (s: RemoteResponse): void {
-    if (s && s.ok === false) { $('gmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('сначала разблокируйте (введите текущий PIN)'))); return; }
+  if (!/^\d{3}$/.test(p)) { $('gmsg').textContent = tr('PIN должен состоять из 3 цифр'); return; }
+  // смена существующего PIN требует подтверждения: берём текущий PIN из поля (плеер проверит cmd.current)
+  const cur = s_pinState.locked ? p : '';
+  runCmd('cmd=setPin&pin=' + encodeURIComponent(p) + '&current=' + encodeURIComponent(cur), function (s: RemoteResponse): void {
     $('gmsg').textContent = 'PIN ' + (s && s.pinSet ? tr('задан') : tr('снят'));
+    render(s);
+  });
+};
+$('pinclear').onclick = function (): void {
+  // снятие PIN = setPin с пустым значением; если пульт заблокирован, текущий PIN спрашиваем (плеер проверит cmd.current)
+  let cur = '';
+  if (s_pinState.locked) {
+    cur = val('pin').trim();
+    if (!cur) cur = (window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):')) || '').trim();
+    if (!cur) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+  }
+  runCmd('cmd=setPin&pin=&current=' + encodeURIComponent(cur), function (s: RemoteResponse): void {
+    $('gmsg').textContent = 'PIN ' + (s && s.pinSet ? tr('задан') : tr('снят'));
+    render(s);
   });
 };
 $('pinunlock').onclick = function (): void {
-  const p = val('pin').trim();
-  api('cmd=unlock&pin=' + encodeURIComponent(p)).then(function (s: RemoteResponse): void { $('gmsg').textContent = (s && s.ok) ? tr('Заблокированные показаны') : tr('Неверный PIN'); render(s); });
+  const p = val('pin').trim() || (window.prompt(tr('PIN (3 цифры):')) || '').trim();
+  if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+  runCmd('cmd=unlock&pin=' + encodeURIComponent(p), function (s: RemoteResponse): void {
+    $('gmsg').textContent = tr('Заблокированные показаны');
+    render(s);
+  });
 };
 
 $('sync').onclick = function (): void {

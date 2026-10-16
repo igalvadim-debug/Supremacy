@@ -90,6 +90,15 @@ export const DICT: Record<string, [string, string]> = {
   "Неверный PIN": ["Falsche PIN", "Wrong PIN"],
   "PIN не задан": ["Keine PIN gesetzt", "No PIN set"],
   "PIN снят": ["PIN entfernt", "PIN removed"],
+  "Сначала задайте PIN": ["Bitte zuerst eine PIN festlegen", "Set a PIN first"],
+  "Сначала разблокируйте все скрытые группы": ["Zuerst alle versteckten Gruppen entsperren", "Unlock all hidden groups first"],
+  "Снять блокировку группы": ["Gruppensperre aufheben", "Unblock group"],
+  "Скрыть группу под PIN": ["Gruppe per PIN verstecken", "Hide group behind PIN"],
+  "PIN должен состоять из 3 цифр": ["Die PIN muss aus 3 Ziffern bestehen", "The PIN must consist of 3 digits"],
+  "🔓 PIN задан, скрытые группы показаны ({0})": ["🔓 PIN gesetzt, versteckte Gruppen werden angezeigt ({0})", "🔓 PIN set, hidden groups are shown ({0})"],
+  "🔒 PIN задан, скрыто групп: {0}": ["🔒 PIN gesetzt, gesperrte Gruppen: {0}", "🔒 PIN set, blocked groups: {0}"],
+  "сначала задайте PIN": ["zuerst eine PIN festlegen", "set a PIN first"],
+  "сначала разблокируйте все скрытые группы": ["zuerst alle versteckten Gruppen entsperren", "unlock all hidden groups first"],
 
   /* телепрограмма */
   "Телепрограмма доступна только в Android-приложении.": ["Der Programmführer ist nur in der Android-App verfügbar.", "The TV guide is only available in the Android app."],
