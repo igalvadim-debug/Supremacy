@@ -336,7 +336,10 @@ async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
   if (loading) return;
   const url = urlInput.value.trim();
   if (!url) { setStatus(tr('Введите ссылку на плейлист.'), 'error'); return; }
-  if (!/^https?:\/\//i.test(url)) { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
+  // строгая проверка парсером URL: принимаем только http/https (regex пропускал «httpx://…»)
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(url); } catch (e) { setStatus(tr('Некорректная ссылка на плейлист'), 'error'); return; }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
   // Нет сети — не пытаемся грузить, сразу понятное сообщение + сохранённая копия, если есть.
   if (navigator.onLine === false) {
     if (cached && cached.text) {
