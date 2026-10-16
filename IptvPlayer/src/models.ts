@@ -42,7 +42,7 @@ export interface ServerFile { name: string; size: number; modified: number; }
 export interface FilesResponse { files: ServerFile[]; }
 export interface UploadResponse { ok?: boolean; size?: number; error?: string; }
 export interface RemoteCommand {
-  cmd?: string; url?: string; name?: string; key?: string; pin?: string; text?: string;
+  cmd?: string; url?: string; name?: string; key?: string; pin?: string; text?: string; srv?: string; tok?: string;
   current?: string | number; on?: boolean | string | number; i?: number | string;
   q?: string; target?: string; sources?: string | string[];
 }
@@ -55,6 +55,7 @@ export interface RemoteSnapshot {
   playing: boolean; paused: boolean; count: number; viewCount: number;
   query: string; group: string; groups: Group[]; favGroup: string; favCount: number;
   blocked: string[]; pinSet: boolean; locked: boolean; channels: RemoteChannel[];
+  ntfyServer?: string; ntfyToken?: string;
 }
 /** Some commands return only an acknowledgment, others a complete snapshot. */
 export interface RemoteResponse extends Partial<RemoteSnapshot> {

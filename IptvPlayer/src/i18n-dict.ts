@@ -334,6 +334,8 @@ export const DICT: Record<string, [string, string]> = {
   "Токен сохранён": ["Token gespeichert", "Token saved"],
   "Токен ntfy — только если топик приватный; иначе оставьте пустым.": ["ntfy-Token — nur bei privatem Topic; sonst leer lassen.", "ntfy token — only if the topic is private; otherwise leave empty."],
   "Сохранено": ["Gespeichert", "Saved"],
+  "Приём по коду (ntfy)": ["Empfang per Code (ntfy)", "Receive by code (ntfy)"],
+  "Токен (необязательно)": ["Token (optional)", "Token (optional)"],
   "Код приёма: {0} · {1} мин": ["Empfangscode: {0} · {1} Min.", "Receive code: {0} · {1} min"],
   "Код истёк — попробуйте позже": ["Code abgelaufen — später erneut versuchen", "Code expired — try again later"],
   "Сервер ntfy (по умолчанию ntfy.sh) и токен — сохраните после ввода.": ["ntfy-Server (Standard ntfy.sh) und Token — nach Eingabe speichern.", "ntfy server (default ntfy.sh) and token — save after entering."],

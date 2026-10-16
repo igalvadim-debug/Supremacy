@@ -66,6 +66,12 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
   <div class="row"><button class="p" id="plsave" data-i18n>&#128190; Сохранить в файл</button><button id="plreset" data-i18n>&#8617; Сбросить правки</button></div>
   <div class="status" id="plmsg"></div>
 </details>
+<details id="ntcfg">
+  <summary data-i18n>Приём по коду (ntfy)</summary>
+  <div class="row"><input id="ntsrv" placeholder="https://ntfy.sh/" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div class="row"><input id="nttok" placeholder="Токен (необязательно)" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="ntsvsave" data-i18n>Сохранить</button></div>
+  <div class="status" id="ntsmsg"></div>
+</details>
 <details id="grp">
   <summary data-i18n>Группы и родительский PIN</summary>
   <div class="row"><input id="pin" placeholder="PIN" inputmode="numeric" maxlength="3" autocomplete="off"><button id="pinset" data-i18n>Задать PIN</button><button id="pinclear" data-i18n>Снять PIN</button><button class="p" id="pinunlock" data-i18n>Показать скрытые</button></div>

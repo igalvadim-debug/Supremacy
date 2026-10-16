@@ -2282,6 +2282,8 @@ function remoteState(): RemoteState {
     blocked: Array.from(blockedGroups),
     pinSet: !!parentPin,
     locked: !pinUnlocked,
+    ntfyServer: ntfyServer,
+    ntfyToken: ntfyToken,
     channels: chans
   };
 }
@@ -2506,6 +2508,13 @@ window.RemoteAPI = {
         if (!lt.trim()) return { ok: false, error: 'пустой плейлист' };
         try { applyPlaylist(lt, 'list', null, {}); } catch (e) { return { ok: false, error: String((e as Error).message) }; }
         return { ok: true, note: 'плейлист применён' };
+      }
+      if (name === 'setNtfyCfg') {
+        ntfyServer = normNtfyServer(String(cmd.srv != null ? cmd.srv : ntfyServer));
+        ntfyToken = String(cmd.tok != null ? cmd.tok : ntfyToken).trim();
+        lsSet(LS_NTFY_SERVER, ntfyServer); lsSet(LS_NTFY_TOKEN, ntfyToken);
+        renderNtfyUi();
+        return remoteState();
       }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
       if (name === 'openFile') {

@@ -45,8 +45,8 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
   .flagbtn .flag svg { display:block; width:1.6rem; height:1.1rem; border-radius:.15rem; }
   .flagbtn.on { box-shadow:0 0 0 .15rem var(--accent); }
 </style>
-  <script type="module" crossorigin src="/assets/remote-Btb2RqLq.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/i18n-BVCGc8W6.js">
+  <script type="module" crossorigin src="/assets/remote-CKs5_dP2.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/i18n-CQP5Q8nV.js">
 </head>
 <body>
 <header>
@@ -67,6 +67,12 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
   <div class="row"><input id="epgurl" placeholder="Ссылка на EPG (xml / xml.gz)…" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="epgload">EPG</button></div>  <div class="row"><button class="p" id="pldl" data-i18n>⬇ Скачать текущий</button><label class="filebtn"><span data-i18n>Импорт файла</span><input id="plup" type="file" accept=".m3u,.m3u8" hidden></label></div>
   <div class="row"><button class="p" id="plsave" data-i18n>&#128190; Сохранить в файл</button><button id="plreset" data-i18n>&#8617; Сбросить правки</button></div>
   <div class="status" id="plmsg"></div>
+</details>
+<details id="ntcfg">
+  <summary data-i18n>Приём по коду (ntfy)</summary>
+  <div class="row"><input id="ntsrv" placeholder="https://ntfy.sh/" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div class="row"><input id="nttok" placeholder="Токен (необязательно)" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="ntsvsave" data-i18n>Сохранить</button></div>
+  <div class="status" id="ntsmsg"></div>
 </details>
 <details id="grp">
   <summary data-i18n>Группы и родительский PIN</summary>

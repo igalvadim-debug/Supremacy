@@ -24,6 +24,8 @@ function runCmd(q: string, onOk: (s: RemoteResponse) => void, msgEl?: HTMLElemen
 }
 /** Последнее состояние плеера (нужно обработчикам PIN: locked/pinSet). */
 let lastState: RemoteResponse | null = null;
+/** Поля сервера/токена ntfy заполняются один раз, чтобы не затирать ввод во время поллинга. */
+let ntPrefilled = false;
 /** Returns PIN flags from the last accepted player response, defaulting each missing flag to false. */
 function s_pinState(): { locked: boolean; pinSet: boolean } { return { locked: !!(lastState && lastState.locked), pinSet: !!(lastState && lastState.pinSet) }; }
 /**
@@ -50,6 +52,7 @@ function render(s: RemoteResponse | null): void {
   if (!s || !s.ok) { $('err').textContent = tr('Нет связи с плеером'); return; }
   lastState = s;
   $('err').textContent = '';
+  if (!ntPrefilled) { ntPrefilled = true; const a = document.getElementById('ntsrv'); if (a instanceof HTMLInputElement) a.value = s.ntfyServer || ''; const b = document.getElementById('nttok'); if (b instanceof HTMLInputElement) b.value = s.ntfyToken || ''; }
   $('now').textContent = s.current ? s.current.name : tr('Канал не выбран');
   if (s.current && s.current.group) {
     const sm = document.createElement('small');
@@ -140,6 +143,13 @@ $('plload').onclick = function (): void {
     if (s && s.ok === false) { $('plmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('не удалось'))); return; }
     $('plmsg').textContent = tr('Плейлист загружается…'); setTimeout(poll, 3000);
   }).catch(function (): void { $('plmsg').textContent = tr('Нет связи с плеером'); });
+};
+$('ntsvsave').onclick = function (): void {
+  $('ntsmsg').textContent = tr('Сохраняю…');
+  api('cmd=setNtfyCfg&srv=' + encodeURIComponent(val('ntsrv')) + '&tok=' + encodeURIComponent(val('nttok'))).then(function (s: RemoteResponse): void {
+    if (s && s.ok === false) { $('ntsmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('не удалось'))); return; }
+    $('ntsmsg').textContent = tr('Сохранено');
+  }).catch(function (): void { $('ntsmsg').textContent = tr('Нет связи с плеером'); });
 };
 $('epgload').onclick = function (): void {
   const u = val('epgurl').trim();
