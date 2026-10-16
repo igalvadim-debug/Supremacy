@@ -14,12 +14,14 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /** Tests the Android shell's configuration without starting an Android runtime. */
 public class AndroidConfigurationTest {
 
     private static final String ANDROID = "http://schemas.android.com/apk/res/android";
+    private static final String[] DENSITIES = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
     private Element manifest;
 
     @Before
@@ -98,6 +100,24 @@ public class AndroidConfigurationTest {
     }
 
     @Test
+    public void fileProviderRootsHaveUniqueUriNamesAndNoAdditionalStorageScopes() throws Exception {
+        Element paths = readXml("res/xml/file_paths.xml");
+        Set<String> allowedRoots = new HashSet<>(Arrays.asList("external-path", "cache-path"));
+        Set<String> names = new HashSet<>();
+        NodeList children = paths.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element) {
+                Element root = (Element) child;
+                assertTrue("Unexpected shared storage scope: " + root.getTagName(), allowedRoots.contains(root.getTagName()));
+                String name = root.getAttribute("name");
+                assertFalse("Shared roots need a URI name", name.trim().isEmpty());
+                assertTrue("Duplicate root names overwrite FileProvider mappings: " + name, names.add(name));
+            }
+        }
+    }
+
+    @Test
     public void applicationAndActivityLabelsResolveToThePlayerName() throws Exception {
         Element strings = readXml("res/values/strings.xml");
         for (Element component : Arrays.asList(onlyElement(manifest, "application"), androidElement(manifest, "activity", ".MainActivity"))) {
@@ -116,6 +136,45 @@ public class AndroidConfigurationTest {
         assertEquals("Theme.SplashScreen", style.getAttribute("parent"));
         assertEquals("@drawable/splash", namedElement(style, "item", "android:background").getTextContent());
         assertTrue("A default splash is needed outside orientation-specific qualifiers", new File("src/main/res/drawable/splash.png").isFile());
+    }
+
+    @Test
+    public void launcherIconsHaveRasterFallbacksForAndroidBeforeAdaptiveIcons() {
+        Element application = onlyElement(manifest, "application");
+        for (String attribute : Arrays.asList("icon", "roundIcon")) {
+            String reference = androidAttribute(application, attribute);
+            assertTrue("Launcher icons must resolve to mipmap resources", reference.startsWith("@mipmap/"));
+            assertDensityBitmapsExist("mipmap", reference.substring("@mipmap/".length()));
+        }
+    }
+
+    @Test
+    public void adaptiveLauncherIconsResolveTheirBackgroundAndForeground() throws Exception {
+        Element application = onlyElement(manifest, "application");
+        for (String attribute : Arrays.asList("icon", "roundIcon")) {
+            String reference = androidAttribute(application, attribute);
+            assertTrue(reference.startsWith("@mipmap/"));
+            Element icon = readXml("res/mipmap-anydpi-v26/" + reference.substring("@mipmap/".length()) + ".xml");
+            assertEquals("adaptive-icon", icon.getTagName());
+
+            String background = androidAttribute(onlyElement(icon, "background"), "drawable");
+            assertTrue("Adaptive icons need a background color", background.startsWith("@color/"));
+            Element color = namedElement(readXml("res/values/ic_launcher_background.xml"), "color",
+                background.substring("@color/".length()));
+            assertTrue("The icon background must be a valid RGB or ARGB color",
+                color.getTextContent().trim().matches("#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})"));
+
+            String foreground = androidAttribute(onlyElement(icon, "foreground"), "drawable");
+            assertTrue("Adaptive icons need a foreground image", foreground.startsWith("@mipmap/"));
+            assertDensityBitmapsExist("mipmap", foreground.substring("@mipmap/".length()));
+        }
+    }
+
+    @Test
+    public void splashImagesExistForBothOrientationsAtEverySupportedDensity() {
+        for (String orientation : Arrays.asList("port", "land")) {
+            assertDensityBitmapsExist("drawable-" + orientation, "splash");
+        }
     }
 
     @Test
@@ -142,6 +201,14 @@ public class AndroidConfigurationTest {
         for (Element view : Arrays.asList(layout, webView)) {
             assertEquals("match_parent", androidAttribute(view, "layout_width"));
             assertEquals("match_parent", androidAttribute(view, "layout_height"));
+        }
+    }
+
+    private static void assertDensityBitmapsExist(String resourceType, String name) {
+        for (String density : DENSITIES) {
+            File image = new File("src/main/res/" + resourceType + "-" + density, name + ".png");
+            assertTrue("Missing bitmap: " + image, image.isFile());
+            assertTrue("Empty bitmap: " + image, image.length() > 0);
         }
     }
 
