@@ -21,7 +21,7 @@ export interface IptvNativePlugin {
   setAutoStart?(options: { on: boolean }): Promise<void>;
   clearCache?(): Promise<{ freed: number }>;
 }
-export interface NativePlayerEvent { state: string; message?: string; }
+export interface NativePlayerEvent { state: string; message?: string; status?: number; }
 export interface IptvPlayerPlugin {
   addListener(event: 'state', listener: (event: NativePlayerEvent) => void): Promise<PluginListenerHandle>;
   setBounds(options: { x: number; y: number; w: number; h: number }): Promise<void>;

@@ -1,6 +1,8 @@
 import type { FilesResponse, UploadResponse, ServerFile } from './models';
+import qrcode from 'qrcode-generator';
 // Strikte Typisierung: siehe ../MIGRATION.md.
 import { requiredElement } from './dom';
+import { tr, trLoose, locale, setLang, applyStatic, buildLangButtons, syncLangFromDevice } from './i18n';
 const ALLOWED = /\.(m3u8?|xml|xml\.gz)$/i;
 const drop = requiredElement('drop'), pick = requiredElement<HTMLInputElement>('pick');
 const uploads = requiredElement('uploads'), list = requiredElement('list');
@@ -23,12 +25,12 @@ function listMessage(text: string, isErr: boolean): void {
 /** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
 function fmtSize(n: number | undefined): string {
   const size = Number(n);
-  if (size < 1024) return n + ' Б';
-  if (size < 1048576) return (size / 1024).toFixed(1) + ' КБ';
-  return (size / 1048576).toFixed(1) + ' МБ';
+  if (size < 1024) return n + ' ' + tr('Б');
+  if (size < 1048576) return (size / 1024).toFixed(1) + ' ' + tr('КБ');
+  return (size / 1048576).toFixed(1) + ' ' + tr('МБ');
 }
 /** Formats a Unix timestamp in milliseconds as a Russian local date/time, returning an empty string for a falsy timestamp. */
-function fmtDate(ms: number): string { return ms ? new Date(ms).toLocaleString('ru-RU') : ''; }
+function fmtDate(ms: number): string { return ms ? new Date(ms).toLocaleString(locale()) : ''; }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -40,7 +42,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 function refresh(): void {
   fetch('/api/files', { cache: 'no-store' }).then(function (r: Response): Promise<FilesResponse> { return r.json() as Promise<FilesResponse>; }).then(function (data: FilesResponse): void {
     list.textContent = '';
-    if (!data.files.length) { list.appendChild(el('div', 'empty', 'Файлов пока нет')); return; }
+    if (!data.files.length) { list.appendChild(el('div', 'empty', tr('Файлов пока нет'))); return; }
     data.files.forEach(function (f: ServerFile): void {
       const row = el('div', 'item');
       const name = el('div', 'name');
@@ -49,26 +51,26 @@ function refresh(): void {
       name.appendChild(a);
       row.appendChild(name);
       row.appendChild(el('div', 'meta', fmtSize(f.size) + ' · ' + fmtDate(f.modified)));
-      const del = el('button', '', 'Удалить');
+      const del = el('button', '', tr('Удалить'));
       del.onclick = function (): void {
-        if (!window.confirm('Удалить файл «' + f.name + '»?')) return;
+        if (!window.confirm(tr('Удалить файл «{0}»?', f.name))) return;
         // обновляем список только после успешного удаления; ошибку — показываем явно
         fetch('/api/files?name=' + encodeURIComponent(f.name), { method: 'DELETE' })
           .then(function (response: Response): void {
             if (!response.ok) {
-              listMessage('Не удалось удалить «' + f.name + '»: HTTP ' + response.status, true);
+              listMessage(tr('Не удалось удалить «{0}»: HTTP {1}', f.name, response.status), true);
               return;
             }
             refresh();
           })
-          .catch(function (): void { listMessage('Не удалось удалить «' + f.name + '»: нет связи с устройством', true); });
+          .catch(function (): void { listMessage(tr('Не удалось удалить «{0}»: нет связи с устройством', f.name), true); });
       };
       row.appendChild(del);
       list.appendChild(row);
     });
   }).catch(function (): void {
     list.textContent = '';
-    list.appendChild(el('div', 'empty err', 'Нет связи с устройством. Приложение должно быть открыто, сервер включён.'));
+    list.appendChild(el('div', 'empty err', tr('Нет связи с устройством. Приложение должно быть открыто, сервер включён.')));
   });
 }
 
@@ -98,7 +100,7 @@ function next(): void {
     refresh();
     next();
   }
-  if (!ALLOWED.test(file.name)) { done(false, 'Допустимы .m3u, .m3u8, .xml, .xml.gz'); return; }
+  if (!ALLOWED.test(file.name)) { done(false, tr('Допустимы .m3u, .m3u8, .xml, .xml.gz')); return; }
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/upload?name=' + encodeURIComponent(file.name));
   xhr.upload.onprogress = function (e: ProgressEvent<EventTarget>): void {
@@ -110,12 +112,12 @@ function next(): void {
   xhr.onload = function (): void {
     let r: UploadResponse = {};
     try { r = JSON.parse(xhr.responseText) as UploadResponse; } catch (e) { /* не JSON */ }
-    if (xhr.status === 200 && r.ok) done(true, 'Готово · ' + fmtSize(r.size));
-    else done(false, r.error || ('Ошибка ' + xhr.status));
+    if (xhr.status === 200 && r.ok) done(true, tr('Готово · {0}', fmtSize(r.size)));
+    else done(false, r.error ? trLoose(r.error) : tr('Ошибка {0}', xhr.status));
   };
-  xhr.onerror = function (): void { done(false, 'Обрыв связи'); };
+  xhr.onerror = function (): void { done(false, tr('Обрыв связи')); };
   xhr.timeout = 60000; // конечный таймаут: зависший ответ не блокирует очередь
-  xhr.ontimeout = function (): void { done(false, 'Таймаут загрузки'); };
+  xhr.ontimeout = function (): void { done(false, tr('Таймаут загрузки')); };
   xhr.send(file);
 }
 /** Appends selected files to the upload queue and starts processing if idle. */
@@ -135,4 +137,29 @@ pick.onchange = function (): void { add(pick.files!); pick.value = ''; };
 drop.addEventListener('drop', function (e: DragEvent): void { if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files); });
 
 refresh();
+/** QR-коды страницы загрузки и пульта по адресу, с которого открыта эта страница; при сбое остаётся ссылка текстом. */
+function renderQrCards(): void {
+  const base = window.location.origin;
+  const items: Array<[string, string]> = [['qrUpload', base + '/'], ['qrRemote', base + '/remote']];
+  items.forEach(function (it: [string, string]): void {
+    const box = document.getElementById(it[0]);
+    if (!box) return;
+    box.textContent = '';
+    try {
+      const q = qrcode(0, 'M');
+      q.addData(it[1]);
+      q.make();
+      box.innerHTML = q.createSvgTag(4, 8);
+    } catch (e) { /* покажем только ссылку */ }
+    box.appendChild(el('div', 'url', it[1]));
+  });
+}
+renderQrCards();
 setInterval(refresh, 5000);
+
+/* ---- Язык: тексты страницы и флаги (по умолчанию язык, выбранный на ТВ) ---- */
+import type { Lang } from './i18n';
+applyStatic();
+buildLangButtons(requiredElement('langBtns'), function (l: Lang): void { setLang(l, true); window.location.reload(); });
+syncLangFromDevice();
+

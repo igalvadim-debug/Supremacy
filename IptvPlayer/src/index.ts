@@ -5,6 +5,8 @@ import type { IptvNativePlugin, IptvPlayerPlugin, NativePlayerEvent, CapacitorHt
 import type { Channel, ChannelInput, Group, PlaylistSource, PlaylistIdentity, PlaylistEntry, PlaylistOptions, PlayerState, Settings, CatchupDefaults, EpgProgram, EpgState, ServerStatus, ServerFile, RemoteCommand, RemoteResponse, RemoteState, RemoteChannel, Point, Direction, RemoteKey, NavMetadata, NavElement } from './models';
 // Strikte Typisierung: siehe ../MIGRATION.md.
 import { requiredElement } from './dom';
+import { tr, trIn, trLoose, getLang, setLang, hasLangChoice, locale, applyStatic, buildLangButtons, LANGS, ERR_KEYS, RETRY_KEY } from './i18n';
+import type { Lang, StreamErrKind } from './i18n';
 
 /* ================= Константы ================= */
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -58,10 +60,12 @@ function mk<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 function setStatus(text: string, kind?: string): void { statusEl.textContent = text; statusEl.className = kind || ''; }
 /** Returns the Russian noun form for a channel count. */
 function plural(n: number): string {
+  if (getLang() === 'de') return n === 1 ? 'Kanal' : 'Kanäle';
+  if (getLang() === 'en') return n === 1 ? 'channel' : 'channels';
   const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return 'канал';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'канала';
-  return 'каналов';
+  if (m10 === 1 && m100 !== 11) return 'канал'; // noi18n
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'канала'; // noi18n
+  return 'каналов'; // noi18n
 }
 function nativeHttp(): CapacitorHttpType | null {
   return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp) || null;
@@ -102,14 +106,14 @@ function showToast(text: string, ms?: number): void {
 }
 function isText<T extends Element>(el: T | null): el is T & HTMLInputElement { return !!el && el instanceof HTMLInputElement && el.type === 'text'; }
 /** Formats a Unix timestamp in milliseconds as a Russian hour/minute string in the local time zone. */
-function fmtTime(ms: number): string { return new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+function fmtTime(ms: number): string { return new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }); }
 /** Formats a Unix timestamp in milliseconds as a Russian day/month and time in the local time zone. */
-function fmtDateTime(ms: number): string { return new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+function fmtDateTime(ms: number): string { return new Date(ms).toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 /** Formats bytes with Russian unit labels, using powers of 1,024 and one decimal above the byte range. */
 function fmtSize(n: number): string {
-  if (n < 1024) return n + ' Б';
-  if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
-  return (n / 1048576).toFixed(1) + ' МБ';
+  if (n < 1024) return n + ' ' + tr('Б');
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' ' + tr('КБ');
+  return (n / 1048576).toFixed(1) + ' ' + tr('МБ');
 }
 /** Returns a URL hostname and final path segment, or the original input if URL parsing fails. */
 function niceUrlName(url: string): string {
@@ -118,7 +122,7 @@ function niceUrlName(url: string): string {
     return u.hostname + (last ? '/' + last : '');
   } catch (e) { return url; }
 }
-function errMsg(err: unknown): string { return (err && typeof err === 'object' && 'message' in err && err.message) ? String(err.message) : String(err); }
+function errMsg(err: unknown): string { return (err && typeof err === 'object' && 'message' in err && err.message) ? trLoose(String(err.message)) : trLoose(String(err)); }
 
 /* ================= Настройки, избранное, EPG-состояние ================= */
 const settings: Settings = {
@@ -160,7 +164,7 @@ let libDb: IDBDatabase | null = null;
 function dbOpen(): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>(function (resolve: (value: IDBDatabase | PromiseLike<IDBDatabase>) => void, reject: (reason?: unknown) => void): void {
     if (libDb) { resolve(libDb); return; }
-    if (!window.indexedDB) { reject(new Error('IndexedDB недоступна')); return; }
+    if (!window.indexedDB) { reject(new Error(tr('IndexedDB недоступна'))); return; }
     const rq = window.indexedDB.open('iptv-lib', 1);
     rq.onupgradeneeded = function (): void { rq.result.createObjectStore('playlists', { keyPath: 'id' }); };
     rq.onsuccess = function (): void { libDb = rq.result; resolve(libDb); };
@@ -230,7 +234,7 @@ function guessName(url: string): string {
 }
 /** Creates channel data with search keys, falling back to playlist header catch-up settings for falsy values. */
 function makeChannel(o: ChannelInput): Channel {
-  const name = o.name || 'Без названия', group = o.group || '';
+  const name = o.name || tr('Без названия'), group = o.group || '';
   return { name: name, url: o.url, logo: o.logo || '', group: group, tvgId: o.tvgId || '', tvgName: o.tvgName || '',
     catchup: o.catchup || headerCatchup.mode || '', catchupSource: o.catchupSource || headerCatchup.source || '', catchupDays: o.catchupDays || headerCatchup.days || 0,
     nameLower: name.toLowerCase(), groupLower: group.toLowerCase() };
@@ -300,12 +304,12 @@ async function fetchPlaylistText(url: string): Promise<string> {
   if (window.Capacitor && http) {
     // Android: нативный HTTP — без CORS, с браузерными заголовками
     const res = await http.get({ url: url, headers: HTTP_HEADERS, responseType: 'text', connectTimeout: 20000, readTimeout: 60000 });
-    if (res.status < 200 || res.status >= 300) throw new Error('сервер ответил HTTP ' + res.status);
+    if (res.status < 200 || res.status >= 300) throw new Error(tr('сервер ответил HTTP {0}', res.status));
     return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   }
   // ПК / обычный браузер: стандартный fetch
   const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) throw new Error('сервер ответил HTTP ' + r.status);
+  if (!r.ok) throw new Error(tr('сервер ответил HTTP {0}', r.status));
   return await r.text();
 }
 /** Saves the current reload timestamp in milliseconds and refreshes its settings display. */
@@ -313,7 +317,7 @@ function markReloaded(): void { lsSet(LS_RELOADED, String(Date.now())); updateLa
 /** Formats a load error, substituting a browser CORS/network hint for TypeError when native HTTP is absent. */
 function netErrText(err: unknown): string {
   let msg = errMsg(err);
-  if (err instanceof TypeError && !nativeHttp()) msg = 'браузер заблокировал запрос (CORS или нет сети). В Android-приложении запрос идёт нативно.';
+  if (err instanceof TypeError && !nativeHttp()) msg = tr('браузер заблокировал запрос (CORS или нет сети). В Android-приложении запрос идёт нативно.');
   return msg;
 }
 
@@ -325,23 +329,23 @@ function netErrText(err: unknown): string {
 async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
   if (loading) return;
   const url = urlInput.value.trim();
-  if (!url) { setStatus('Введите ссылку на плейлист.', 'error'); return; }
-  if (!/^https?:\/\//i.test(url)) { setStatus('Ссылка должна начинаться с http:// или https://', 'error'); return; }
+  if (!url) { setStatus(tr('Введите ссылку на плейлист.'), 'error'); return; }
+  if (!/^https?:\/\//i.test(url)) { setStatus(tr('Ссылка должна начинаться с http:// или https://'), 'error'); return; }
   lsSet(LS_URL, url);
   loading = true;
-  setStatus('Загрузка плейлиста…');
+  setStatus(tr('Загрузка плейлиста…'));
   try {
     const text = await fetchPlaylistText(url);
-    applyPlaylist(text, 'ссылка', { kind: 'url', key: url }, {});
+    applyPlaylist(text, tr('ссылка'), { kind: 'url', key: url }, {});
     markReloaded();
   } catch (err) {
     if (cached && cached.text) {
       try {
-        applyPlaylist(cached.text, 'сохранённая копия', { kind: 'url', key: url }, { nosave: true });
-        setStatus('Нет связи (' + netErrText(err) + '). Открыта сохранённая копия плейлиста.', 'warn');
-      } catch (e2) { setStatus('Не удалось загрузить плейлист: ' + netErrText(err), 'error'); }
+        applyPlaylist(cached.text, tr('сохранённая копия'), { kind: 'url', key: url }, { nosave: true });
+        setStatus(tr('Нет связи ({0}). Открыта сохранённая копия плейлиста.', netErrText(err)), 'warn');
+      } catch (e2) { setStatus(tr('Не удалось загрузить плейлист: {0}', netErrText(err)), 'error'); }
     } else {
-      setStatus('Не удалось загрузить плейлист: ' + netErrText(err), 'error');
+      setStatus(tr('Не удалось загрузить плейлист: {0}', netErrText(err)), 'error');
     }
   } finally {
     loading = false;
@@ -354,19 +358,19 @@ async function loadFromUrl(cached?: PlaylistEntry): Promise<void> {
  * following the load attempt; an active load or missing entry returns early.
  */
 async function reloadPlaylist(manual: boolean): Promise<void> {
-  if (loading) { if (manual) showToast('Загрузка уже идёт…'); return; }
+  if (loading) { if (manual) showToast(tr('Загрузка уже идёт…')); return; }
   const ent = state.entry;
   if (!ent) {
-    if (manual) { setStatus('Сначала откройте плейлист.', 'warn'); showToast('Нет открытого плейлиста'); }
+    if (manual) { setStatus(tr('Сначала откройте плейлист.'), 'warn'); showToast(tr('Нет открытого плейлиста')); }
     return;
   }
   loading = true;
-  if (manual) { setStatus('Обновление плейлиста…'); showToast('Обновление плейлиста…'); }
+  if (manual) { setStatus(tr('Обновление плейлиста…')); showToast(tr('Обновление плейлиста…')); }
   try {
     let text: string, src: PlaylistSource;
     if (ent.kind === 'file') {
       const n = native();
-      if (!n) throw new Error('обновление файла доступно только в приложении');
+      if (!n) throw new Error(tr('обновление файла доступно только в приложении'));
       const r = await n.readFile({ name: ent.fileName });
       text = r.text;
       src = { kind: 'file', key: ent.fileName };
@@ -374,12 +378,12 @@ async function reloadPlaylist(manual: boolean): Promise<void> {
       text = await fetchPlaylistText(ent.url);
       src = { kind: 'url', key: ent.url };
     }
-    applyPlaylist(text, 'обновлено ' + fmtTime(Date.now()), src, { keep: true });
+    applyPlaylist(text, tr('обновлено {0}', fmtTime(Date.now())), src, { keep: true });
     if (ent.kind === 'url') markReloaded();
-    if (manual) showToast('Плейлист обновлён: ' + state.channels.length + ' ' + plural(state.channels.length));
+    if (manual) showToast(tr('Плейлист обновлён: {0} {1}', state.channels.length, plural(state.channels.length)));
   } catch (err) {
-    setStatus('Не удалось обновить плейлист: ' + (ent.kind === 'url' ? netErrText(err) : errMsg(err)), 'error');
-    if (manual) showToast('Ошибка обновления плейлиста');
+    setStatus(tr('Не удалось обновить плейлист: {0}', ent.kind === 'url' ? netErrText(err) : errMsg(err)), 'error');
+    if (manual) showToast(tr('Ошибка обновления плейлиста'));
   } finally {
     loading = false;
     updateLastReload();
@@ -401,12 +405,12 @@ function autoTick(): void {
 function loadFromFile(): void {
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
-  setStatus('Чтение файла…');
+  setStatus(tr('Чтение файла…'));
   const reader = new FileReader();
-  reader.onerror = function (): void { setStatus('Не удалось прочитать файл.', 'error'); };
+  reader.onerror = function (): void { setStatus(tr('Не удалось прочитать файл.'), 'error'); };
   reader.onload = function (): void {
     try { applyPlaylist(String(reader.result || ''), file.name, { kind: 'file', key: file.name }, {}); }
-    catch (err) { setStatus('Ошибка: ' + errMsg(err), 'error'); }
+    catch (err) { setStatus(tr('Ошибка: {0}', errMsg(err)), 'error'); }
     try { fileInput.value = ''; } catch (e) { /* ignore */ }
   };
   reader.readAsText(file, 'utf-8');
@@ -424,18 +428,18 @@ function loadFromFile(): void {
 function applyPlaylist(text: string, sourceName: string, src: PlaylistSource | null, opts: PlaylistOptions): void {
   opts = opts || {};
   const trimmed = text.replace(/^\uFEFF/, '').trim();
-  if (!trimmed) throw new Error('плейлист пуст');
-  if (/<html[\s>]/i.test(trimmed.slice(0, 500))) throw new Error('сервер вернул HTML-страницу вместо плейлиста');
+  if (!trimmed) throw new Error(tr('плейлист пуст'));
+  if (/<html[\s>]/i.test(trimmed.slice(0, 500))) throw new Error(tr('сервер вернул HTML-страницу вместо плейлиста'));
   const sourceUrl = src && src.kind === 'url' ? src.key : '';
   headerEpgUrl = '';
   let channels: Channel[];
   if (/#EXT-X-(STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE)/.test(trimmed)) {
-    if (!sourceUrl) throw new Error('это манифест одного HLS-потока, а не список каналов — загрузите его по ссылке');
-    channels = [makeChannel({ name: 'Поток HLS', url: sourceUrl, group: 'Прямая ссылка' })];
+    if (!sourceUrl) throw new Error(tr('это манифест одного HLS-потока, а не список каналов — загрузите его по ссылке'));
+    channels = [makeChannel({ name: tr('Поток HLS'), url: sourceUrl, group: tr('Прямая ссылка') })];
   } else {
     channels = parsePlaylist(trimmed);
   }
-  if (!channels.length) throw new Error('в плейлисте нет каналов с http/https-ссылками');
+  if (!channels.length) throw new Error(tr('в плейлисте нет каналов с http/https-ссылками'));
 
   if (src) {
     const id = (src.kind === 'url' ? 'u:' : 'f:') + src.key;
@@ -468,7 +472,7 @@ function applyPlaylist(text: string, sourceName: string, src: PlaylistSource | n
   }
   renderGroups();
   renderGrid(!!opts.keep);
-  setStatus((opts.keep ? 'Обновлено: ' : 'Загружено: ') + channels.length + ' ' + plural(channels.length) + ' · ' + sourceName, 'ok');
+  setStatus((opts.keep ? tr('Обновлено: ') : tr('Загружено: ')) + channels.length + ' ' + plural(channels.length) + ' · ' + sourceName, 'ok');
   if (!opts.keep && state.mode === 'menu') {
     const target = cardMap.get(state.view[lastIdx >= 0 ? lastIdx : 0]);
     if (target) setFocus(target);
@@ -507,7 +511,7 @@ function twoStep(btn: NavElement, label: string, action: () => void): void {
   btn._act = function (): void {
     if (!btn._armed) {
       btn._armed = true;
-      btn.textContent = 'Удалить?';
+      btn.textContent = tr('Удалить?');
       btn.classList.add('armed');
       clearTimeout(btn._t);
       btn._t = window.setTimeout(function (): void { btn._armed = false; btn.textContent = label; btn.classList.remove('armed'); }, 3000);
@@ -525,21 +529,21 @@ async function renderLibrary(): Promise<void> {
   entries.sort(function (a: PlaylistEntry, b: PlaylistEntry): number { return b.savedAt - a.savedAt; });
   libList.textContent = '';
   if (!entries.length) {
-    libList.appendChild(mk('div', 'note', 'Пока пусто. Плейлисты, открытые по ссылке или из файла, сохраняются здесь автоматически.'));
+    libList.appendChild(mk('div', 'note', tr('Пока пусто. Плейлисты, открытые по ссылке или из файла, сохраняются здесь автоматически.')));
   }
   entries.forEach(function (e: PlaylistEntry): void {
     const row = mk('div', 'lrow' + (state.entry && state.entry.id === e.id ? ' current' : ''));
     const main = mk('div', 'lmain');
     main.setAttribute('data-nav', '1');
     main.appendChild(mk('div', 'lname', e.name));
-    main.appendChild(mk('div', 'lmeta', (e.kind === 'url' ? 'ссылка' : 'файл') + ' · ' + e.count + ' ' + plural(e.count) + ' · ' + fmtDateTime(e.savedAt)));
+    main.appendChild(mk('div', 'lmeta', (e.kind === 'url' ? tr('ссылка') : tr('файл')) + ' · ' + e.count + ' ' + plural(e.count) + ' · ' + fmtDateTime(e.savedAt)));
     main._act = function (): void { openEntry(e.id, false); };
     const del = mk('button', '', '\u2715');
     del.setAttribute('data-nav', '1');
     twoStep(del, '\u2715', function (): void {
       libDel(e.id).then(function (): void {
         if (state.entry && state.entry.id === e.id) { state.entry = null; lsSet(LS_ENTRY, ''); }
-        showToast('Плейлист удалён');
+        showToast(tr('Плейлист удалён'));
         renderLibrary();
       });
     });
@@ -558,7 +562,7 @@ async function renderFiles(force: boolean): Promise<void> {
   const n = native();
   if (!n) {
     fileList.textContent = '';
-    fileList.appendChild(mk('div', 'note', 'Файловый сервер и папка «Загрузки» доступны только в Android-приложении.'));
+    fileList.appendChild(mk('div', 'note', tr('Файловый сервер и папка «Загрузки» доступны только в Android-приложении.')));
     return;
   }
   let files: ServerFile[] = [];
@@ -568,7 +572,7 @@ async function renderFiles(force: boolean): Promise<void> {
   filesSig = sig;
   fileList.textContent = '';
   if (!files.length) {
-    fileList.appendChild(mk('div', 'note', 'Файлов пока нет. Загрузите их через браузер, когда сервер включён.'));
+    fileList.appendChild(mk('div', 'note', tr('Файлов пока нет. Загрузите их через браузер, когда сервер включён.')));
   }
   files.forEach(function (f: ServerFile): void {
     const isEpg = /\.xml(\.gz)?$/i.test(f.name);
@@ -576,16 +580,16 @@ async function renderFiles(force: boolean): Promise<void> {
     const main = mk('div', 'lmain');
     main.setAttribute('data-nav', '1');
     main.appendChild(mk('div', 'lname', f.name));
-    main.appendChild(mk('div', 'lmeta', (isEpg ? 'телепрограмма (нажмите, чтобы использовать)' : 'плейлист (нажмите, чтобы открыть)') + ' · ' + fmtSize(f.size) + ' · ' + fmtDateTime(f.modified)));
+    main.appendChild(mk('div', 'lmeta', (isEpg ? tr('телепрограмма (нажмите, чтобы использовать)') : tr('плейлист (нажмите, чтобы открыть)')) + ' · ' + fmtSize(f.size) + ' · ' + fmtDateTime(f.modified)));
     main._act = function (): void { if (isEpg) setEpgFile(f.name); else openDownloadFile(f.name); };
     const del = mk('button', '', '\u2715');
     del.setAttribute('data-nav', '1');
     twoStep(del, '\u2715', function (): void {
       n.deleteFile({ name: f.name }).then(function (): void {
         if (epg.file === f.name) { epg.file = ''; lsSet(LS_EPGFILE, ''); epgReload(true); }
-        showToast('Файл удалён');
+        showToast(tr('Файл удалён'));
         renderFiles(true);
-      }, function (e: unknown): void { showToast('Не удалось удалить: ' + errMsg(e)); });
+      }, function (e: unknown): void { showToast(tr('Не удалось удалить: {0}', errMsg(e))); });
     });
     row.appendChild(main);
     row.appendChild(del);
@@ -602,11 +606,11 @@ async function renderFiles(force: boolean): Promise<void> {
 async function openEntry(id: string, startup: boolean): Promise<void> {
   let e: PlaylistEntry | undefined | null = null;
   try { e = await libGet(id); } catch (x) { e = null; }
-  if (!e) { showToast('Плейлист не найден'); return; }
+  if (!e) { showToast(tr('Плейлист не найден')); return; }
   if (!startup) closeLibrary();
   const savedEdit = lsGet('iptv.edit.' + id);
   if (savedEdit) {
-    try { applyPlaylist(savedEdit, e.name + ' (с правками)', { kind: e.kind, key: e.kind === 'url' ? e.url : (e.fileName || e.name) }, { nosave: true }); return; }
+    try { applyPlaylist(savedEdit, tr('{0} (с правками)', e.name), { kind: e.kind, key: e.kind === 'url' ? e.url : (e.fileName || e.name) }, { nosave: true }); return; }
     catch (err) { /* применим исходник */ }
   }
   if (e.kind === 'url') {
@@ -615,7 +619,7 @@ async function openEntry(id: string, startup: boolean): Promise<void> {
     await loadFromUrl(e);
   } else {
     try { applyPlaylist(e.text, e.name, { kind: 'file', key: e.fileName || e.name }, { nosave: true }); }
-    catch (err) { setStatus('Не удалось открыть «' + e.name + '»: ' + errMsg(err), 'error'); }
+    catch (err) { setStatus(tr('Не удалось открыть «{0}»: {1}', e.name, errMsg(err)), 'error'); }
   }
 }
 /** Reads and applies a native download by filename; no-ops without the bridge and displays read/apply failures. */
@@ -627,8 +631,8 @@ async function openDownloadFile(name: string): Promise<void> {
     closeLibrary();
     applyPlaylist(r.text, name, { kind: 'file', key: name }, {});
   } catch (e) {
-    setStatus('Не удалось открыть «' + name + '»: ' + errMsg(e), 'error');
-    showToast('Не удалось открыть файл');
+    setStatus(tr('Не удалось открыть «{0}»: {1}', name, errMsg(e)), 'error');
+    showToast(tr('Не удалось открыть файл'));
   }
 }
 
@@ -642,14 +646,14 @@ function serverUrl(): string {
 function renderServerUi(): void {
   const url = serverUrl();
   const hasNative = !!native();
-  srvChk.textContent = srv.running ? 'Выключить сервер' : 'Включить сервер';
+  srvChk.textContent = srv.running ? tr('Выключить сервер') : tr('Включить сервер');
   srvChk.disabled = !hasNative;
-  srvBtn.textContent = srv.running ? 'Выключить сервер' : 'Включить сервер';
+  srvBtn.textContent = srv.running ? tr('Выключить сервер') : tr('Включить сервер');
   let info: string;
-  if (!hasNative) info = 'Доступно только в приложении.';
-  else if (!srv.running) info = 'Сервер выключен.';
-  else if (url) info = 'Откройте в браузере: ' + url;
-  else info = 'Сервер запущен (порт ' + srv.port + '), но Wi-Fi не найден.';
+  if (!hasNative) info = tr('Доступно только в приложении.');
+  else if (!srv.running) info = tr('Сервер выключен.');
+  else if (url) info = tr('Откройте в браузере: {0}', url);
+  else info = tr('Сервер запущен (порт {0}), но Wi-Fi не найден.', srv.port);
   srvInfo.textContent = info;
   srvAddr.textContent = info;
   renderQr();
@@ -672,7 +676,7 @@ function renderQr(): void {
       d.textContent = u;
       box.appendChild(d);
       const h = document.createElement('div');
-      h.textContent = 'Наведите камеру телефона → откроется пульт Remote Supremacy';
+      h.textContent = tr('Наведите камеру телефона → откроется пульт Remote Supremacy');
       box.appendChild(h);
       return;
     } catch (e) { /* покажем ссылку */ }
@@ -688,7 +692,7 @@ async function refreshServerStatus(): Promise<void> {
 /** Starts or stops the native server and saves successful state changes; native failures are displayed as a toast. */
 async function setServer(on: boolean): Promise<void> {
   const n = native();
-  if (!n) { showToast('Сервер доступен только в приложении'); renderServerUi(); return; }
+  if (!n) { showToast(tr('Сервер доступен только в приложении')); renderServerUi(); return; }
   try {
     if (on) {
       let port = toInt(lsGet(LS_PORT), 0, 0, 65535);
@@ -701,7 +705,7 @@ async function setServer(on: boolean): Promise<void> {
       lsSet(LS_SRV, '0');
     }
   } catch (e) {
-    showToast('Сервер: ' + errMsg(e), 3500);
+    showToast(tr('Сервер: {0}', errMsg(e)), 3500);
   }
   renderServerUi();
 }
@@ -719,7 +723,7 @@ function buildGroups(): void {
     // The key was inserted immediately above.
     counts.set(k, counts.get(k)! + 1);
   });
-  state.groups = order.map(function (k: string): Group { return { key: k, label: k === GROUP_NONE ? 'Без группы' : k, count: counts.get(k)! }; });
+  state.groups = order.map(function (k: string): Group { return { key: k, label: k === GROUP_NONE ? tr('Без группы') : k, count: counts.get(k)! }; });
 }
 /** Updates the channel view using PIN visibility, the selected group or favorites, and a case-insensitive name/group search. */
 function computeView(): void {
@@ -766,11 +770,11 @@ function pinpadOpen(): boolean { return pinpadEl.classList.contains('open'); }
 function pinOpen(mode: 'set' | 'unlock'): void {
   if (mode === 'set' && parentPin && !pinUnlocked) mode = 'unlock';
   if (mode !== 'set') {
-    if (Date.now() < pinBlockedUntil) { showToast('Слишком много неверных попыток. Подождите 10 секунд'); return; }
+    if (Date.now() < pinBlockedUntil) { showToast(tr('Слишком много неверных попыток. Подождите 10 секунд')); return; }
     if (pinBlockedUntil) { pinFailCount = 0; pinBlockedUntil = 0; }
   }
   pinMode = mode; pinBuf = '';
-  pinTitle.textContent = mode === 'set' ? 'Задайте PIN из 3 цифр' : 'Введите PIN (3 цифры)';
+  pinTitle.textContent = mode === 'set' ? tr('Задайте PIN из 3 цифр') : tr('Введите PIN (3 цифры)');
   pinRenderDots(); pinRenderGrid();
   pinpadEl.classList.add('open');
   const b = pinGrid.querySelector('button'); if (b) setFocus(b, false);
@@ -799,23 +803,23 @@ function pinRenderGrid(): void {
 }
 /** Saves a new PIN or checks the entered PIN, revealing groups on success and clearing the input on mismatch. */
 function pinSubmit(): void {
-  if (pinMode === 'set' && parentPin && !pinUnlocked) { pinOpen('unlock'); showToast('Сначала введите текущий PIN'); return; }
-  if (pinMode !== 'set' && Date.now() < pinBlockedUntil) { showToast('Слишком много неверных попыток. Подождите 10 секунд'); return; }
+  if (pinMode === 'set' && parentPin && !pinUnlocked) { pinOpen('unlock'); showToast(tr('Сначала введите текущий PIN')); return; }
+  if (pinMode !== 'set' && Date.now() < pinBlockedUntil) { showToast(tr('Слишком много неверных попыток. Подождите 10 секунд')); return; }
   const v = pinBuf;
   if (pinMode === 'set') {
     parentPin = v; lsSet('iptv.pin', v); pinUnlocked = true; pinFailCount = 0; pinBlockedUntil = 0;
-    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast('PIN задан');
+    pinClose(); buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN задан'));
   } else if (verifyPin(v)) {
     pinUnlocked = true; pinClose(); buildGroups();
     if (state.group && blockedGroups.has(state.group)) state.group = GROUP_ALL;
-    computeView(); renderGroups(); renderGrid(false); showToast('Скрытые группы показаны');
+    computeView(); renderGroups(); renderGrid(false); showToast(tr('Скрытые группы показаны'));
   } else {
     pinBuf = ''; pinRenderDots();
     if (pinFailCount >= PIN_MAX_FAILS) {
       pinClose();
-      showToast('Слишком много неверных попыток. Подождите 10 секунд');
+      showToast(tr('Слишком много неверных попыток. Подождите 10 секунд'));
     } else {
-      showToast('Неверный PIN (' + pinFailCount + '/' + PIN_MAX_FAILS + ')');
+      showToast(tr('Неверный PIN ({0}/{1})', pinFailCount, PIN_MAX_FAILS));
     }
   }
 }
@@ -826,12 +830,12 @@ function renderGroups(): void {
   let favCount = 0;
   state.channels.forEach(function (c: Channel): void { if (isFav(c)) favCount++; });
   const frag = document.createDocumentFragment();
-  frag.appendChild(makeChip(GROUP_ALL, 'Все', state.channels.length));
-  frag.appendChild(makeChip(GROUP_FAV, '\u2605 Избранное', favCount));
+  frag.appendChild(makeChip(GROUP_ALL, tr('Все'), state.channels.length));
+  frag.appendChild(makeChip(GROUP_FAV, tr('\u2605 Избранное'), favCount));
   state.groups.forEach(function (g: Group): void { frag.appendChild(makeChip(g.key, g.label, g.count)); });
   const lock = mk('div', 'chip' + (pinUnlocked ? ' active' : ''));
   lock.setAttribute('data-nav', '1');
-  lock.appendChild(document.createTextNode(pinUnlocked ? '\uD83D\uDD13' : (parentPin ? '\uD83D\uDD12 Блок (' + blockedGroups.size + ')' : '\uD83D\uDD12 PIN')));
+  lock.appendChild(document.createTextNode(pinUnlocked ? '\uD83D\uDD13' : (parentPin ? tr('\uD83D\uDD12 Блок ({0})', blockedGroups.size) : '\uD83D\uDD12 PIN')));
   lock._act = armUnlock;
   frag.appendChild(lock);
   groupBar.appendChild(frag);
@@ -860,7 +864,7 @@ function toggleFav(ch: Channel | null | undefined): void {
   if (favs.has(ch.url)) { favs.delete(ch.url); on = false; } else { favs.add(ch.url); on = true; }
   saveFavs();
   try { if (navigator.vibrate) navigator.vibrate(on ? [30, 40, 30] : 30); } catch (e) { /* ignore */ }
-  showToast((on ? '\u2605 В избранное: ' : '\u2606 Убрано из избранного: ') + ch.name);
+  showToast((on ? tr('\u2605 В избранное: ') : tr('\u2606 Убрано из избранного: ')) + ch.name);
   const el = cardMap.get(ch);
   if (el) el.classList.toggle('fav', on);
   renderGroups();
@@ -870,7 +874,7 @@ function toggleFav(ch: Channel | null | undefined): void {
 window.__iptvMenu = function (): void {          // кнопка «три полоски» на пульте (вызывается из MainActivity)
   if (state.mode === 'player' && state.current) { toggleFav(state.current); showOsd(); return; }
   if (focusedEl && focusedEl._channel) { toggleFav(focusedEl._channel); return; }
-  showToast('Наведите курсор на канал');
+  showToast(tr('Наведите курсор на канал'));
 };
 
 /* ================= Сетка каналов ================= */
@@ -909,7 +913,7 @@ function createCard(ch: Channel): NavElement {
   return el;
 }
 function createMoreCard(rest: number): NavElement {
-  const el = mk('div', 'card more', 'Показать ещё\n(осталось ' + rest + ')');
+  const el = mk('div', 'card more', tr('Показать ещё\n(осталось {0})', rest));
   el.setAttribute('data-nav', '1');
   el.style.whiteSpace = 'pre-line';
   return el;
@@ -929,13 +933,13 @@ function renderGrid(keepScroll: boolean): void {
   if (state.view.length > n) {
     frag.appendChild(createMoreCard(state.view.length - n));
   } else if (!state.view.length) {
-    frag.appendChild(mk('div', 'empty', !state.channels.length ? 'Список каналов пуст'
-      : (state.group === GROUP_FAV && !searchInput.value.trim() ? 'В избранном пусто. Нажмите ★ на канале, чтобы добавить.' : 'Ничего не найдено')));
+    frag.appendChild(mk('div', 'empty', !state.channels.length ? tr('Список каналов пуст')
+      : (state.group === GROUP_FAV && !searchInput.value.trim() ? tr('В избранном пусто. Нажмите ★ на канале, чтобы добавить.') : tr('Ничего не найдено'))));
   }
   grid.appendChild(frag);
   if (keepScroll) gridPane.scrollTop = st;
   const total = state.channels.length;
-  countEl.textContent = total ? (state.view.length === total ? total + ' ' + plural(total) : state.view.length + ' из ' + total) : '';
+  countEl.textContent = total ? (state.view.length === total ? total + ' ' + plural(total) : tr('{0} из {1}', state.view.length, total)) : '';
   if (focusedEl && !document.body.contains(focusedEl)) focusedEl = null;
   markPlaying();
   scheduleEpgRefresh();
@@ -960,12 +964,12 @@ function showMore(): void {
 /* ================= Телепрограмма (EPG) ================= */
 function renderEpgInfo(): void {
   let t: string;
-  if (!native()) t = 'Телепрограмма доступна только в Android-приложении.';
-  else if (!epg.enabled) t = 'Телепрограмма выключена.';
-  else if (epg.status === 'loading') t = 'Загрузка телепрограммы…';
-  else if (epg.status === 'ok' && epg.info) t = 'Источник: ' + epg.info.source + ' · каналов в EPG: ' + epg.info.channels + ', передач: ' + epg.info.programmes + ' · ' + fmtDateTime(epg.info.loadedAt);
-  else if (epg.status === 'error') t = 'Ошибка: ' + epg.err;
-  else t = 'Нет источника. Загрузите xml или xml.gz в «Плейлисты» либо откройте плейлист со ссылкой url-tvg.';
+  if (!native()) t = tr('Телепрограмма доступна только в Android-приложении.');
+  else if (!epg.enabled) t = tr('Телепрограмма выключена.');
+  else if (epg.status === 'loading') t = tr('Загрузка телепрограммы…');
+  else if (epg.status === 'ok' && epg.info) t = tr('Источник: {0} · каналов в EPG: {1}, передач: {2} · {3}', epg.info.source, epg.info.channels, epg.info.programmes, fmtDateTime(epg.info.loadedAt));
+  else if (epg.status === 'error') t = tr('Ошибка: {0}', epg.err);
+  else t = tr('Нет источника. Загрузите xml или xml.gz в «Плейлисты» либо откройте плейлист со ссылкой url-tvg.');
   epgInfoEl.textContent = t;
   epgChk.checked = epg.enabled;
   epgChk.disabled = !native();
@@ -1026,7 +1030,7 @@ function setEpgFile(name: string): void {
   epg.enabled = true;
   lsSet(LS_EPG, '1');
   closeLibrary();
-  showToast('Телепрограмма: ' + name);
+  showToast(tr('Телепрограмма: {0}', name));
   epgReload(true);
 }
 
@@ -1087,13 +1091,13 @@ function epgPaintBlock(blockEl: HTMLElement, nowEl: HTMLElement, nextEl: HTMLEle
   if (!d || (!d.n && !d.x)) { blockEl.style.display = 'none'; return; }
   blockEl.style.display = 'block';
   if (d.n) {
-    nowEl.textContent = 'Сейчас: ' + d.n.t + '  ' + fmtTime(d.n.s) + '\u2013' + fmtTime(d.n.e);
+    nowEl.textContent = tr('Сейчас: {0}  {1}\u2013{2}', d.n.t, fmtTime(d.n.s), fmtTime(d.n.e));
     barEl.style.width = progress(d.n) + '%';
   } else {
     nowEl.textContent = '';
     barEl.style.width = '0';
   }
-  nextEl.textContent = d.x ? 'Далее: ' + d.x.t + '  ' + fmtTime(d.x.s) : '';
+  nextEl.textContent = d.x ? tr('Далее: {0}  {1}', d.x.t, fmtTime(d.x.s)) : '';
 }
 function epgPaintAll(): void {
   cardMap.forEach(function (el: NavElement): void { epgPaintCard(el); });
@@ -1113,7 +1117,7 @@ function renderFavs(): void {
   favsList.textContent = '';
   favList = state.channels.filter(isFav);
   if (!favList.length) {
-    favsList.appendChild(mk('div', 'frow', 'В избранном пусто. Удержание OK на канале — добавить.'));
+    favsList.appendChild(mk('div', 'frow', tr('В избранном пусто. Удержание OK на канале — добавить.')));
     favIdx = 0;
     return;
   }
@@ -1159,16 +1163,16 @@ function guideDayLabel(ms: number): string {
   const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const diff = Math.round((dd - d0) / 86400000);
-  const rel = diff === 0 ? 'Сегодня' : diff === -1 ? 'Вчера' : diff === 1 ? 'Завтра' : diff === -2 ? 'Позавчера' : diff === 2 ? 'Послезавтра' : '';
-  const wd = d.toLocaleDateString('ru-RU', { weekday: 'short' });
-  const dm = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  const rel = diff === 0 ? tr('Сегодня') : diff === -1 ? tr('Вчера') : diff === 1 ? tr('Завтра') : diff === -2 ? tr('Позавчера') : diff === 2 ? tr('Послезавтра') : '';
+  const wd = d.toLocaleDateString(locale(), { weekday: 'short' });
+  const dm = d.toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
   return (rel ? rel + ' · ' : '') + wd + ', ' + dm;
 }
 /** Stores and renders the supplied program order with local day headings, archive hints, and current/first-future descriptions. */
 function renderGuide(programs: EpgProgram[]): void {
   guideProgs = programs.slice();
   guideList.textContent = '';
-  if (!programs.length) { guideList.appendChild(mk('div', 'gd', 'Для этого канала нет программы передач.')); return; }
+  if (!programs.length) { guideList.appendChild(mk('div', 'gd', tr('Для этого канала нет программы передач.'))); return; }
   const ch = state.current, canCap = !!(ch && (ch.catchupSource || headerCatchup.source));
   let now = Date.now(), lastDay: string | null = null, nextDone = false;
   programs.forEach(function (p: EpgProgram, i: number): void {
@@ -1177,7 +1181,7 @@ function renderGuide(programs: EpgProgram[]): void {
     const past = p.e <= now, cur = p.s <= now && p.e > now;
     const row = mk('div', 'grow' + (cur ? ' cur' : (past ? ' past' : ' fut')) + (i === guideIdx ? ' focused' : ''));
     row._idx = i;
-    row.appendChild(mk('div', 'gt', fmtTime(p.s) + '\u2013' + fmtTime(p.e) + (cur ? ' · идёт сейчас' : (past && canCap ? ' · ⟲ архив' : ''))));
+    row.appendChild(mk('div', 'gt', fmtTime(p.s) + '\u2013' + fmtTime(p.e) + (cur ? tr(' · идёт сейчас') : (past && canCap ? tr(' · ⟲ архив') : ''))));
     row.appendChild(mk('div', 'gn', p.t));
     let showDesc = p.d && cur;
     if (!nextDone && p.s > now) { if (p.d) showDesc = true; nextDone = true; }
@@ -1232,19 +1236,19 @@ function guidePick(): void {
   const now = Date.now();
   if (p.e <= now) {
     const url = catchupUrl(ch, p);
-    if (!url) { showToast('У этого канала нет архива'); return; }
-    closeGuide(); showToast('Архив: ' + p.t); playUrl(url);
+    if (!url) { showToast(tr('У этого канала нет архива')); return; }
+    closeGuide(); showToast(tr('Архив: {0}', p.t)); playUrl(url);
   } else if (p.s <= now) {
     closeGuide(); playUrl(ch.url);
   } else {
-    showToast('Передача ещё не началась');
+    showToast(tr('Передача ещё не началась'));
   }
 }
 /** Requests up to 500 native EPG programs for the current channel and opens the guide at current or next; request errors produce a toast. */
 async function openGuide(): Promise<void> {
   const ch = state.current, n = native();
   if (!ch) return;
-  if (!n || !epg.enabled || epg.status !== 'ok') { showToast('Телепрограмма недоступна'); return; }
+  if (!n || !epg.enabled || epg.status !== 'ok') { showToast(tr('Телепрограмма недоступна')); return; }
   try {
     const r = await n.epgSchedule({ id: ch.tvgId, name: ch.name, alt: ch.tvgName, limit: GUIDE_LIMIT });
     let progs = r.programs || [], now = Date.now(), ci = -1;
@@ -1256,7 +1260,7 @@ async function openGuide(): Promise<void> {
     guide.classList.add('open');
     guideScrollToIdx();
     showOsd();
-  } catch (e) { showToast('Не удалось получить программу'); }
+  } catch (e) { showToast(tr('Не удалось получить программу')); }
 }
 
 /* ================= Воспроизведение ================= */
@@ -1267,6 +1271,86 @@ function showVideoMsg(text: string, isError: boolean): void {
   if (isError) playFailed = true;
 }
 function hideVideoMsg(): void { videoMsg.className = ''; }
+/* ---- Ошибки потока: крупно на языке интерфейса, ниже на двух других, код — мелко ---- */
+const RETRY_DELAYS_MS = [1000, 3000, 7000];
+let retryCount = 0;
+let retryTimer: number | undefined = undefined;
+/** Показывает ошибку потока на трёх языках; final=false — идёт автоповтор, к тексту добавляется обратный отсчёт. */
+function showStreamError(kind: StreamErrKind, code: string, final: boolean, retrySec?: number, attempt?: number, max?: number): void {
+  videoMsg.textContent = '';
+  const order: Lang[] = [getLang()].concat(LANGS.filter(function (l: Lang): boolean { return l !== getLang(); }));
+  order.forEach(function (l: Lang, i: number): void {
+    const d = document.createElement('div');
+    d.className = i === 0 ? 'em1' : 'em2';
+    let txt = trIn(l, ERR_KEYS[kind]);
+    if (!final && retrySec !== undefined) txt += ' \u00B7 ' + trIn(l, RETRY_KEY, retrySec, attempt || 1, max || 1);
+    d.textContent = txt;
+    videoMsg.appendChild(d);
+  });
+  const c = document.createElement('div');
+  c.className = 'emc';
+  c.textContent = code;
+  videoMsg.appendChild(c);
+  videoMsg.className = 'show error';
+  if (final) playFailed = true;
+}
+/** Сопоставляет имя ошибки ExoPlayer (Media3) и HTTP-код с понятной причиной. */
+function nativeErrKind(code: string, status?: number): StreamErrKind {
+  if (code.indexOf('BAD_HTTP_STATUS') >= 0) {
+    if (status === 404 || status === 410) return 'notfound';
+    if (status === 401 || status === 403 || status === 429) return 'denied';
+    return 'server';
+  }
+  if (code.indexOf('FILE_NOT_FOUND') >= 0) return 'notfound';
+  if (code.indexOf('CLEARTEXT') >= 0) return 'cleartext';
+  if (code.indexOf('TIMEOUT') >= 0) return 'timeout';
+  if (code.indexOf('INVALID_HTTP_CONTENT_TYPE') >= 0 || code.indexOf('PARSING_') >= 0) return 'format';
+  if (code.indexOf('AUDIO_TRACK') >= 0) return 'audio';
+  if (code.indexOf('DECOD') >= 0) return 'decoder';
+  if (code.indexOf('ERROR_CODE_IO_') >= 0 || code.indexOf('REMOTE_ERROR') >= 0) return 'network';
+  return 'generic';
+}
+/** Причина фатальной ошибки hls.js (браузерный запасной плеер). */
+function hlsErrKind(data: ErrorData): StreamErrKind {
+  if (String(data.type) === 'networkError') {
+    const st = data.response ? data.response.code : 0;
+    if (st === 404 || st === 410) return 'notfound';
+    if (st === 401 || st === 403 || st === 429) return 'denied';
+    return 'network';
+  }
+  if (String(data.type) === 'mediaError') return 'format';
+  return 'generic';
+}
+/** Ошибка нативного плеера: при сетевых сбоях — автоповтор через 1, 3 и 7 секунд, затем понятное сообщение. */
+function handleNativeError(ev: NativePlayerEvent): void {
+  const code = ev.message || 'ERROR';
+  const kind = nativeErrKind(code, ev.status);
+  const label = ev.status ? code + ' \u00B7 HTTP ' + ev.status : code;
+  const cur = state.current;
+  const retryable = kind === 'network' || kind === 'timeout' || kind === 'server' || kind === 'denied' || kind === 'generic';
+  if (cur && retryable && retryCount < RETRY_DELAYS_MS.length) {
+    const delay = RETRY_DELAYS_MS[retryCount];
+    retryCount++;
+    showStreamError(kind, label, false, delay / 1000, retryCount, RETRY_DELAYS_MS.length);
+    window.clearTimeout(retryTimer);
+    retryTimer = window.setTimeout(function (): void { if (state.current === cur) retryNative(cur.url); }, delay);
+    return;
+  }
+  showStreamError(kind, label, true);
+}
+/** Повторный запуск того же потока в нативном плеере (без полной остановки). */
+function retryNative(url: string): void {
+  const np = playerPlugin();
+  if (!np) return;
+  playFailed = false;
+  np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e: unknown): void {
+    if (state.current) showStreamError('generic', errMsg(e), true);
+  });
+}
+/* Сеть вернулась — перезапускаем канал, который остановился с ошибкой. */
+window.addEventListener('online', function (): void {
+  if (state.current && playFailed) { retryCount = 0; playChannel(state.current); }
+});
 /** Attempts browser video playback, ignoring synchronous errors and rejected play promises, including autoplay denial. */
 function safePlay(): void {
   try { const p = video.play(); if (p && p.catch) p.catch(function (): void { /* автозапуск запрещён — ждём действия */ }); } catch (e) { /* ignore */ }
@@ -1276,6 +1360,7 @@ function stopPlayback(): void {
   playToken++;
   gating = false;
   hasPlayed = false;
+  retryCount = 0; window.clearTimeout(retryTimer);
   if (nativeErrHandler) { video.removeEventListener('error', nativeErrHandler); nativeErrHandler = null; }
   if (hls) { try { hls.destroy(); } catch (e) { /* ignore */ } hls = null; }
   try { video.pause(); } catch (e) { /* ignore */ }
@@ -1310,7 +1395,7 @@ function gatePlay(token: number, ms: number): void {
   function check(): void {
     if (token !== playToken || userPaused) { gating = false; return; }
     if (bufferedAhead() * 1000 >= ms || Date.now() - t0 > ms + 8000) { gating = false; safePlay(); return; }
-    showVideoMsg('Буферизация…', false);
+    showVideoMsg(tr('Буферизация…'), false);
     window.setTimeout(check, 120);
   }
   check();
@@ -1326,7 +1411,7 @@ function startNative(url: string, token: number, allowHlsFallback: boolean): voi
     video.removeEventListener('error', handler);
     nativeErrHandler = null;
     if (allowHlsFallback && hlsAvailable()) startHls(url, token, false);
-    else showVideoMsg('Не удалось воспроизвести поток', true);
+    else showVideoMsg(tr('Не удалось воспроизвести поток'), true);
   };
   nativeErrHandler = handler;
   video.addEventListener('error', handler);
@@ -1354,7 +1439,7 @@ function startHls(url: string, token: number, allowNativeFallback: boolean): voi
     if (token !== playToken || !data || !data.fatal) return;
     if (data.type === H.ErrorTypes.NETWORK_ERROR && netRetries < 2) {
       netRetries++;
-      showVideoMsg('Проблема сети, повтор ' + netRetries + '…', false);
+      showStreamError('network', 'HLS', false, 1, netRetries, 2);
       window.setTimeout(function (): void { if (token === playToken && hls === h) h.startLoad(); }, 1200);
       return;
     }
@@ -1366,7 +1451,7 @@ function startHls(url: string, token: number, allowNativeFallback: boolean): voi
     try { h.destroy(); } catch (e) { /* ignore */ }
     if (hls === h) hls = null;
     if (allowNativeFallback) startNative(url, token, false);
-    else showVideoMsg('Ошибка потока (' + (data.details || data.type) + ')', true);
+    else showStreamError(hlsErrKind(data), String(data.details || data.type), true);
   });
   h.loadSource(url);
   h.attachMedia(video);
@@ -1377,7 +1462,7 @@ function playUrl(url: string): void {
   stopPlayback();
   const token = playToken;
   playFailed = false;
-  showVideoMsg('Загрузка потока…', false);
+  showVideoMsg(tr('Загрузка потока…'), false);
   const looksHls = /\.m3u8(\?|#|$)/i.test(url);
   if (looksHls && hlsAvailable()) startHls(url, token, true);
   else startNative(url, token, hlsAvailable());
@@ -1389,9 +1474,9 @@ function ensureNativeListener(np: IptvPlayerPlugin | null): void {
   nativeListenerReady = true;
   np.addListener('state', function (ev: NativePlayerEvent): void {
     if (!ev || !state.current) return;
-    if (ev.state === 'buffering') showVideoMsg('Буферизация…', false);
-    else if (ev.state === 'playing') { hasPlayed = true; hideVideoMsg(); updateOsdState(); }
-    else if (ev.state === 'error') showVideoMsg('Ошибка потока' + (ev.message ? ' (' + ev.message + ')' : ''), true);
+    if (ev.state === 'buffering') showVideoMsg(tr('Буферизация…'), false);
+    else if (ev.state === 'playing') { hasPlayed = true; retryCount = 0; hideVideoMsg(); updateOsdState(); }
+    else if (ev.state === 'error') handleNativeError(ev);
   });
 }
 /** Sends video-box bounds in physical pixels to the native player when a channel is selected; rejected updates are ignored. */
@@ -1411,12 +1496,12 @@ function playNativePlayer(url: string): void {
   const np = playerPlugin()!;
   stopPlayback();
   playFailed = false;
-  showVideoMsg('Загрузка потока…', false);
+  showVideoMsg(tr('Загрузка потока…'), false);
   ensureNativeListener(np);
   requestAnimationFrame(syncPlayerBounds);
   np.setVisible({ visible: true }).catch(function (): void { /* ignore */ });
   np.play({ url: url, bufferMs: settings.bufferMs }).catch(function (e: unknown): void {
-    if (state.current) showVideoMsg('Не удалось воспроизвести поток (' + errMsg(e) + ')', true);
+    if (state.current) showStreamError('generic', errMsg(e), true);
   });
 }
 /** Selects a channel, saves its URL, clears user pause, refreshes channel/EPG UI, and starts its stream. Synchronous playback setup errors propagate. */
@@ -1454,7 +1539,7 @@ function zap(delta: number): void {
 video.addEventListener('playing', function (): void { hasPlayed = true; hideVideoMsg(); });
 video.addEventListener('waiting', function (): void {
   if (!state.current || playFailed) return;
-  showVideoMsg('Буферизация…', false);
+  showVideoMsg(tr('Буферизация…'), false);
   // Подвисание: ставим на паузу и ждём, пока снова накопится заданный буфер
   if (settings.bufferMs > 0 && hasPlayed && !gating && !userPaused && !video.seeking) {
     try { video.pause(); } catch (e) { /* ignore */ }
@@ -1466,8 +1551,8 @@ video.addEventListener('play', updateOsdState);
 
 /* ================= OSD и экран плеера ================= */
 function updateOsdState(): void {
-  if (playerPlugin()) { osdState.textContent = userPaused ? 'Пауза' : ''; return; }
-  osdState.textContent = userPaused ? '\u23F8 Пауза' : '';
+  if (playerPlugin()) { osdState.textContent = userPaused ? tr('Пауза') : ''; return; }
+  osdState.textContent = userPaused ? tr('\u23F8 Пауза') : '';
 }
 /** Shows current channel and EPG details and schedules hiding after 4.5 seconds; no-ops without a current channel. */
 function showOsd(): void {
@@ -1523,6 +1608,7 @@ function handleBack(): void {
   const t = Date.now();
   if (t - lastBackHandled < 250) return;   // одно нажатие не должно обработаться дважды
   lastBackHandled = t;
+  if (langPickOpen()) return;
   if (pinpadOpen()) { pinClose(); return; }
   if (guideOpen()) { closeGuide(); return; }
   if (libraryOpen()) { closeLibrary(); return; }
@@ -1532,7 +1618,7 @@ function handleBack(): void {
   if (isText(ae)) { ae.blur(); return; }
   if (t - lastBackAt < 2000) { exitApp(); return; }
   lastBackAt = t;
-  showToast('Нажмите «Назад» ещё раз для выхода');
+  showToast(tr('Нажмите «Назад» ещё раз для выхода'));
 }
 function registerBack(): void {
   const app = appPlugin();
@@ -1544,17 +1630,34 @@ registerBack();
 
 /* ================= Настройки ================= */
 function settingsOpen(): boolean { return settingsEl.classList.contains('open'); }
+/* ================= Язык интерфейса ================= */
+const langPickEl = $('langPick');
+function langPickOpen(): boolean { return langPickEl.classList.contains('open'); }
+/** Сохраняет язык и перезапускает интерфейс, чтобы все тексты построились заново. */
+function chooseLang(l: Lang): void {
+  setLang(l, true);
+  const np = playerPlugin();
+  const reload = function (): void { window.location.reload(); };
+  if (np) { Promise.resolve(np.stop()).then(reload, reload); } else reload();
+}
+function buildSettingsLang(): void { buildLangButtons($('langBtns'), chooseLang); }
+/** Первый запуск: экран выбора языка с флагами. */
+function openLangPick(): void {
+  const btns = buildLangButtons($('langPickBtns'), chooseLang);
+  langPickEl.classList.add('open');
+  setFocus(btns[LANGS.indexOf(getLang())] || btns[0], false);
+}
 let bufAtOpen: number = 0;
 function updateLastReload(): void {
   const t = parseInt(lsGet(LS_RELOADED), 10), ent = state.entry;
-  if (!ent) lastReloadEl.textContent = 'Плейлист ещё не открыт.';
-  else if (ent.kind === 'file') lastReloadEl.textContent = 'Открыт файл «' + ent.fileName + '». Кнопка «Обновить» перечитывает его из «Загрузок».';
-  else lastReloadEl.textContent = t ? 'Последнее обновление: ' + new Date(t).toLocaleString('ru-RU') : 'Плейлист ещё не обновлялся.';
+  if (!ent) lastReloadEl.textContent = tr('Плейлист ещё не открыт.');
+  else if (ent.kind === 'file') lastReloadEl.textContent = tr('Открыт файл «{0}». Кнопка «Обновить» перечитывает его из «Загрузок».', ent.fileName);
+  else lastReloadEl.textContent = t ? tr('Последнее обновление: {0}', new Date(t).toLocaleString(locale())) : tr('Плейлист ещё не обновлялся.');
 }
 function syncSettingsUi(): void {
   bufRange.value = String(settings.bufferMs);
   bufNum.value = String(settings.bufferMs);
-  bufVal.textContent = settings.bufferMs + ' мс';
+  bufVal.textContent = settings.bufferMs + ' ' + tr('мс');
   autoChk.checked = settings.autoReload;
   hoursNum.value = String(settings.reloadHours);
   updateLastReload();
@@ -1602,7 +1705,7 @@ autoStartChk.addEventListener('change', function (): void {
   const n = native();
   if (!n || !n.setAutoStart) return;
   n.setAutoStart({ on: autoStartChk.checked }).then(function (): void {
-    showToast(autoStartChk.checked ? 'Автозапуск включён' : 'Автозапуск выключен');
+    showToast(autoStartChk.checked ? tr('Автозапуск включён') : tr('Автозапуск выключен'));
   }).catch(function (): void { /* ignore */ });
 });
 hoursNum.addEventListener('change', function (): void {
@@ -1619,16 +1722,16 @@ $('epgReloadBtn').addEventListener('click', function (): void { epgReload(true);
 $('epgResetBtn').addEventListener('click', function (): void {
   epg.file = '';
   lsSet(LS_EPGFILE, '');
-  showToast('Файл EPG сброшен');
+  showToast(tr('Файл EPG сброшен'));
   epgReload(true);
 });
 $('clearCacheBtn').addEventListener('click', async function (): Promise<void> {
   const n = native();
-  if (!n || !n.clearCache) { showToast('Очистка кэша доступна только в приложении'); return; }
+  if (!n || !n.clearCache) { showToast(tr('Очистка кэша доступна только в приложении')); return; }
   try {
     const r = await n.clearCache();
-    showToast('Кэш очищен: освобождено ' + fmtSize((r && r.freed) || 0));
-  } catch (e) { showToast('Не удалось очистить кэш: ' + errMsg(e), 3500); }
+    showToast(tr('Кэш очищен: освобождено {0}', fmtSize((r && r.freed) || 0)));
+  } catch (e) { showToast(tr('Не удалось очистить кэш: {0}', errMsg(e)), 3500); }
 });
 srvChk.addEventListener('click', function (): void { setServer(!srv.running); });
 srvBtn.addEventListener('click', function (): void { setServer(!srv.running); });
@@ -1642,18 +1745,18 @@ libBtn.addEventListener('click', openLibrary);
 reloadBtn.addEventListener('click', function (): void { reloadPlaylist(true); });
 $('pinSetBtn').addEventListener('click', function (): void {
   // смена существующего PIN требует авторизации (первоначальная установка — без неё)
-  if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast('Сначала введите текущий PIN'); return; }
+  if (parentPin && !pinUnlocked) { pinOpen('unlock'); showToast(tr('Сначала введите текущий PIN')); return; }
   pinOpen('set');
 });
 $('pinClearBtn').addEventListener('click', function (): void {
-  if (!parentPin) { showToast('PIN не задан'); return; }
+  if (!parentPin) { showToast(tr('PIN не задан')); return; }
   // снятие PIN возможно только после разблокировки или ввода текущего PIN в настройках
   if (!pinUnlocked) {
-    const p = window.prompt('Для снятия PIN введите текущий PIN (3 цифры):');
+    const p = window.prompt(tr('Для снятия PIN введите текущий PIN (3 цифры):'));
     if (p === null) return;
-    if (!verifyPin(String(p).trim())) { showToast('Неверный PIN'); return; }
+    if (!verifyPin(String(p).trim())) { showToast(tr('Неверный PIN')); return; }
   }
-  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast('PIN снят');
+  parentPin = ''; lsSet('iptv.pin', ''); pinUnlocked = false; pinFailCount = 0; pinBlockedUntil = 0; buildGroups(); computeView(); renderGroups(); renderGrid(false); showToast(tr('PIN снят'));
 });
 pinCancel.addEventListener('click', pinClose);
 
@@ -1767,7 +1870,7 @@ function activate(el: NavElement | null): void {
   } else if (el.tagName === 'BUTTON' || (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'file'))) {
     el.click();
   } else if (el === videoBox) {
-    if (state.current) enterPlayer(); else setStatus('Сначала выберите канал справа.', 'warn');
+    if (state.current) enterPlayer(); else setStatus(tr('Сначала выберите канал справа.'), 'warn');
   } else if ('_group' in el && el._group !== undefined) {
     setGroup(el._group);
   } else if (el.classList.contains('more')) {
@@ -1957,6 +2060,7 @@ function remoteState(): RemoteState {
   });
   return {
     ok: true,
+    lang: getLang(),
     current: state.current ? { name: state.current.name, group: state.current.group, url: state.current.url } : null,
     playing: !!state.current,
     paused: !!userPaused,
@@ -2127,8 +2231,8 @@ window.RemoteAPI = {
     if (!sn || !sn.writeFile) return { ok: false, error: 'Запись файла недоступна' };
     remoteNote = '';
     sn.writeFile({ name: se.fileName, text: buildM3uText() })
-      .then(function (): void { remoteNote = 'Сохранено в файл ' + se.fileName; showToast('Сохранено в файл'); })
-      .catch(function (er: unknown): void { remoteNote = 'Не удалось сохранить: ' + errMsg(er); showToast('Не удалось сохранить файл'); });
+      .then(function (): void { remoteNote = 'Сохранено в файл ' + se.fileName; showToast(tr('Сохранено в файл')); })
+      .catch(function (er: unknown): void { remoteNote = 'Не удалось сохранить: ' + errMsg(er); showToast(tr('Не удалось сохранить файл')); });
     return { ok: true, note: 'Записываю в ' + se.fileName + '…' };
   }
   if (name === 'resetEdits') {
@@ -2163,6 +2267,9 @@ window.RemoteAPI = {
 
 /* ================= Старт ================= */
 async function boot(): Promise<void> {
+  applyStatic();
+  buildSettingsLang();
+  if (!hasLangChoice()) { openLangPick(); return; }
   const savedUrl = lsGet(LS_URL);
   if (savedUrl) urlInput.value = savedUrl;
   syncSettingsUi();

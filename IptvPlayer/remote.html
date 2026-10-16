@@ -39,36 +39,42 @@ input[type=checkbox] { width:1.6rem; height:1.6rem; flex:0 0 auto; }
   .it button.mini.del { background:#3a2631; }
   .status { padding:.5rem .9rem; color: var(--muted); font-size:.88rem; }
   .err { color: var(--err); }
+
+  .langbar { display:flex; gap:.4rem; margin:.1rem 0 .3rem; }
+  .flagbtn { display:flex; align-items:center; gap:.35rem; height:2rem; min-width:0; padding:0 .6rem; border:0; border-radius:.5rem; color:#fff; font-size:.85rem; font-weight:700; cursor:pointer; background:#243254; }
+  .flagbtn .flag svg { display:block; width:1.6rem; height:1.1rem; border-radius:.15rem; }
+  .flagbtn.on { box-shadow:0 0 0 .15rem var(--accent); }
 </style>
 </head>
 <body>
 <header>
-  <div class="now" id="now">Соединение…</div>
+  <div class="now" id="now" data-i18n>Соединение…</div>
+  <div class="langbar" id="langBtns"></div>
   <div class="row">
-    <button class="p" id="sync" style="flex:1">&#8635; Синхронизация с плеером</button>
+    <button class="p" id="sync" style="flex:1" data-i18n>&#8635; Синхронизация с плеером</button>
   </div>
   <div class="row">
-    <button class="p" id="prev" aria-label="Предыдущий">&#8249;</button>
-    <button class="p" id="next" aria-label="Следующий">&#8250;</button>
-    <input id="q" placeholder="Поиск канала…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="p" id="prev" aria-label="Предыдущий" data-i18n-aria>&#8249;</button>
+    <button class="p" id="next" aria-label="Следующий" data-i18n-aria>&#8250;</button>
+    <input id="q" placeholder="Поиск канала…" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false">
   </div>
 </header>
 <details id="pl">
-  <summary>Плейлист и EPG</summary>
-  <div class="row"><input id="plurl" placeholder="Ссылка на плейлист M3U…" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="plload">Загрузить</button></div>
-  <div class="row"><input id="epgurl" placeholder="Ссылка на EPG (xml / xml.gz)…" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="epgload">EPG</button></div>  <div class="row"><button class="p" id="pldl">⬇ Скачать текущий</button><label class="filebtn">Импорт файла<input id="plup" type="file" accept=".m3u,.m3u8" hidden></label></div>
-  <div class="row"><button class="p" id="plsave">&#128190; Сохранить в файл</button><button id="plreset">&#8617; Сбросить правки</button></div>
+  <summary data-i18n>Плейлист и EPG</summary>
+  <div class="row"><input id="plurl" placeholder="Ссылка на плейлист M3U…" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="plload" data-i18n>Загрузить</button></div>
+  <div class="row"><input id="epgurl" placeholder="Ссылка на EPG (xml / xml.gz)…" data-i18n-ph autocomplete="off" autocapitalize="off" spellcheck="false"><button id="epgload">EPG</button></div>  <div class="row"><button class="p" id="pldl" data-i18n>⬇ Скачать текущий</button><label class="filebtn"><span data-i18n>Импорт файла</span><input id="plup" type="file" accept=".m3u,.m3u8" hidden></label></div>
+  <div class="row"><button class="p" id="plsave" data-i18n>&#128190; Сохранить в файл</button><button id="plreset" data-i18n>&#8617; Сбросить правки</button></div>
   <div class="status" id="plmsg"></div>
 </details>
 <details id="grp">
-  <summary>Группы и родительский PIN</summary>
-  <div class="row"><input id="pin" placeholder="PIN" inputmode="numeric" maxlength="3" autocomplete="off"><button id="pinset">Задать PIN</button><button class="p" id="pinunlock">Показать скрытые</button></div>
-  <div class="row"><span class="status" style="flex:0 0 auto">Merge</span><select id="mtarget"></select><button id="mmerge">Объединить</button></div>
+  <summary data-i18n>Группы и родительский PIN</summary>
+  <div class="row"><input id="pin" placeholder="PIN" inputmode="numeric" maxlength="3" autocomplete="off"><button id="pinset" data-i18n>Задать PIN</button><button class="p" id="pinunlock" data-i18n>Показать скрытые</button></div>
+  <div class="row"><span class="status" style="flex:0 0 auto">Merge</span><select id="mtarget"></select><button id="mmerge" data-i18n>Объединить</button></div>
   <div id="glist"></div>
   <div class="status" id="gmsg"></div>
 </details>
 <div id="groups"></div>
-<div id="list"><div class="status">Загрузка…</div></div>
+<div id="list"><div class="status" data-i18n>Загрузка…</div></div>
 <div class="status err" id="err"></div>
 <script type="module" src="/src/remote.ts"></script>
 </body>

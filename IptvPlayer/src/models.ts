@@ -50,6 +50,7 @@ export interface RemoteChannel {
   i: number; name: string; group: string; url: string; playing: boolean; fav: boolean;
 }
 export interface RemoteSnapshot {
+  lang?: string;
   current: Pick<Channel, 'name' | 'group' | 'url'> | null;
   playing: boolean; paused: boolean; count: number; viewCount: number;
   query: string; group: string; groups: Group[]; favGroup: string; favCount: number;
