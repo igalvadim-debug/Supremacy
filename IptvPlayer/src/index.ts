@@ -2323,7 +2323,7 @@ window.RemoteAPI = {
         if (state.current) scheduleEpgReload(); else epgReload(true);
         return { ok: true, note: 'EPG: ' + (cmd.url || 'выключен') };
       }
-      return { ok: false, error: trLoose('неизвестная команда: {0}', name) };
+      return { ok: false, error: 'неизвестная команда: ' + name };
     } catch (e) { return { ok: false, error: String((e && typeof e === 'object' && 'message' in e && e.message) || e) }; }
   }
 };
