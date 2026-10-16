@@ -26,7 +26,8 @@ function s_pinState(): { locked: boolean; pinSet: boolean } { return { locked: !
 function askDelGroup(gr: Group, s: RemoteResponse | null): void {
   if (!confirm(tr('Удалить группу «{0}» ({1})?', gr.label, gr.count))) return;
   const isBlocked = !!(s && (s.blocked || []).indexOf(gr.key) !== -1);
-  let q = 'cmd=delGroup&key=' + encodeURIComponent(gr.key);
+  // ключ кодируется через groupKey: пустой ключ («Все») остаётся пустым, GROUP_NONE — как есть
+  let q = 'cmd=delGroup&key=' + groupKey(gr.key);
   if (isBlocked) {
     // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
     const p = val('pin').trim() || (window.prompt(tr('Группа скрыта под PIN. Введите PIN (3 цифры):')) || '').trim();
@@ -119,7 +120,9 @@ $('q').oninput = function (): void {
 $('plload').onclick = function (): void {
   const u = val('plurl').trim();
   if (!u) { $('plmsg').textContent = tr('Введите ссылку на плейлист'); return; }
-  if (!/^https?:\/\//i.test(u)) { $('plmsg').textContent = tr('Ссылка должна начинаться с http:// или https://'); return; }
+  // строгая проверка парсером URL: принимаем только http/https, отклоняём некорректные ссылки до отправки команды
+  try { const pu = new URL(u); if (pu.protocol !== 'http:' && pu.protocol !== 'https:') throw new Error('bad protocol'); }
+  catch (e) { $('plmsg').textContent = tr('Некорректная ссылка на плейлист'); return; }
   $('plmsg').textContent = tr('Загрузка…');
   api('cmd=loadUrl&url=' + encodeURIComponent(u)).then(function (s: RemoteResponse): void {
     if (s && s.ok === false) { $('plmsg').textContent = tr('Ошибка: {0}', trLoose(s.error || tr('не удалось'))); return; }
@@ -229,22 +232,29 @@ $('mmerge').onclick = function (): void {
   const blockedSrc = srcs.some(function (k: string): boolean { return ((lastState && lastState.blocked) || []).indexOf(k) !== -1; });
   let pinQ = '';
   if (blockedSrc) {
-    const p = val('pin').trim() || (window.prompt(tr('Среди отмеченных групп есть скрытые под PIN. Введите PIN (3 цифры):')) || '').trim();
-    if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
-    pinQ = '&pin=' + encodeURIComponent(p);
+    // при разблокированном PIN в плеере авторизация уже пройдена — второй PIN не запрашиваем
+    if (s_pinState().locked) {
+      const p = val('pin').trim() || (window.prompt(tr('Среди отмеченных групп есть скрытые под PIN. Введите PIN (3 цифры):')) || '').trim();
+      if (!p) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется PIN')); return; }
+      pinQ = '&pin=' + encodeURIComponent(p);
+    }
   }
-  runCmd('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + encodeURIComponent(srcs.join('|')) + pinQ, function (s: RemoteResponse): void {
+  // кодируем каждый ключ отдельно и разделяем закодированным «|» — имена групп с «|» не разбиваются
+  runCmd('cmd=mergeGroups&target=' + encodeURIComponent(target) + '&sources=' + srcs.map(encodeURIComponent).join('%7C') + pinQ, function (s: RemoteResponse): void {
     $('gmsg').textContent = tr('Объединено каналов: {0}', (s && s.moved) || 0); render(s);
   });
 };
 $('pinset').onclick = function (): void {
   const p = val('pin').trim();
   if (!/^\d{3}$/.test(p)) { $('gmsg').textContent = tr('PIN должен состоять из 3 цифр'); return; }
-  // смена существующего PIN требует подтверждения: спрашиваем текущий PIN (плеер проверит cmd.current)
+  // смена существующего PIN требует подтверждения: спрашиваем текущий PIN (плеер проверит cmd.current).
+  // поле «pin» содержит новый PIN, поэтому текущий всегда запрашиваем отдельно — через prompt.
   let cur = '';
-  if (s_pinState().pinSet) {
-    cur = val('pin').trim();
-    if (!cur) cur = (window.prompt(tr('Для смены PIN введите текущий PIN (3 цифры):')) || '').trim();
+  const st = s_pinState();
+  if (st.pinSet && !st.locked) {
+    // плеер уже разблокирован в этой сессии — дополнительная проверка текущего PIN не требуется
+  } else if (st.pinSet) {
+    cur = (window.prompt(tr('Для смены PIN введите текущий PIN (3 цифры):')) || '').trim();
     if (!cur) { $('gmsg').textContent = tr('Ошибка: {0}', tr('требуется текущий PIN')); return; }
   }
   runCmd('cmd=setPin&pin=' + encodeURIComponent(p) + '&current=' + encodeURIComponent(cur), function (s: RemoteResponse): void {

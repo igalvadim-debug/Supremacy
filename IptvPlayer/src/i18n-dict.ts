@@ -14,6 +14,7 @@ export const DICT: Record<string, [string, string]> = {
   "сервер ответил HTTP {0}": ["Server antwortete mit HTTP {0}", "server responded with HTTP {0}"],
   "браузер заблокировал запрос (CORS или нет сети). В Android-приложении запрос идёт нативно.": ["Der Browser hat die Anfrage blockiert (CORS oder kein Netz). In der Android-App läuft die Anfrage nativ.", "The browser blocked the request (CORS or no network). In the Android app the request runs natively."],
   "Введите ссылку на плейлист.": ["Playlist-Link eingeben.", "Enter a playlist link."],
+  "Некорректная ссылка на плейлист": ["Ungültiger Playlist-Link", "Invalid playlist link"],
   "Ссылка должна начинаться с http:// или https://": ["Der Link muss mit http:// oder https:// beginnen", "The link must start with http:// or https://"],
   "Загрузка плейлиста…": ["Playlist wird geladen…", "Loading playlist…"],
   "ссылка": ["Link", "link"],

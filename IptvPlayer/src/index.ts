@@ -145,6 +145,8 @@ let srv: ServerStatus = { running: false, port: 0, addresses: [] };
 const blockedGroups = new Set<string>();
 try { (JSON.parse(lsGet('iptv.blocked') || '[]') as unknown[]).forEach(function (k: unknown): void { blockedGroups.add(String(k)); }); } catch (e) { /* ignore */ }
 function saveBlocked(): void { lsSet('iptv.blocked', JSON.stringify(Array.from(blockedGroups))); }
+/** Returns the blocking key for a remote command group key: '' (all channels) blocks the ungrouped group (GROUP_NONE). */
+function blockKeyFromRemote(rawKey: string): string { return rawKey === '' ? GROUP_NONE : rawKey; }
 let parentPin: string = lsGet('iptv.pin') || '';
 let pinUnlocked: boolean = false;
 /** true, если в этом плейлисте уже есть заблокированные группы — разблокировка без PIN не допускается. */
@@ -2195,15 +2197,31 @@ function remoteDelChannel(cmd: RemoteCommand): RemoteResponse {
   const before = state.channels.length;
   state.channels = state.channels.filter(function (x: Channel): boolean { return x.url !== cmd.url; });
   if (state.channels.length === before) return { ok: false, error: 'канал не найден' };
-  if (state.current && state.current.url === cmd.url) state.current = null;
+  if (state.current && state.current.url === cmd.url) {
+    // канал играл — останавливаем воспроизведение и очищаем индикатор «сейчас играет» до сброса state.current
+    stopPlayback();
+    state.current = null;
+    nowTitle.textContent = '';
+    nowGroup.textContent = '';
+  }
+  // удаляем отметку «скрыта» для групп без оставшихся каналов (в blockedGroups ключи хранятся через gkey)
+  const remaining: Record<string, number> = {};
+  state.channels.forEach(function (x: Channel): void { remaining[gkey(x)] = 1; });
+  let blockedChanged = false;
+  Array.from(blockedGroups).forEach(function (k: string): void {
+    if (!remaining[k]) { blockedGroups['delete'](k); blockedChanged = true; }
+  });
+  if (blockedChanged) saveBlocked();
   buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
 }
 /** Removes all channels in cmd.key (null or GROUP_NONE means ungrouped); returns refreshed remote state or a not-found error result. */
 function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
   // удаление скрытой под PIN группы требует авторизации — иначе пульт мог бы снять защиту, просто удалив группу
+  // пустой ключ (rawKey === '') означает «без группы» и хранится в blockedGroups как GROUP_NONE
   const rawKey = cmd.key == null ? GROUP_NONE : String(cmd.key);
-  if (blockedGroups.has(rawKey) && !pinUnlocked) {
+  const blockKey = blockKeyFromRemote(rawKey);
+  if (blockedGroups.has(blockKey) && !pinUnlocked) {
     if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
     if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
     pinUnlocked = true;
@@ -2214,13 +2232,20 @@ function remoteDelGroup(cmd: RemoteCommand): RemoteResponse {
   if (state.channels.length === before) return { ok: false, error: 'группа не найдена' };
   blockedGroups['delete'](key);
   blockedGroups['delete'](rawKey);
+  blockedGroups['delete'](blockKey);
   saveBlocked();
   // из избранного (ключ — url канала) убираем url удалённых каналов, иначе счётчик «★ Избранное» завышается
   const keptUrls: Record<string, number> = {};
   state.channels.forEach(function (x: Channel): void { keptUrls[x.url] = 1; });
   favs.forEach(function (u: string): void { if (!keptUrls[u]) favs['delete'](u); });
   saveFavs();
-  if (state.current && (state.current.group || '') === key) state.current = null;
+  if (state.current && (state.current.group || '') === key) {
+    // играл канал из удаляемой группы — останавливаем воспроизведение и очищаем индикатор до сброса state.current
+    stopPlayback();
+    state.current = null;
+    nowTitle.textContent = '';
+    nowGroup.textContent = '';
+  }
   if (state.group === rawKey) state.group = GROUP_ALL;
   buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
   return remoteState();
@@ -2238,17 +2263,23 @@ function persistChannels(): void {
 function remoteMergeGroups(cmd: RemoteCommand): RemoteResponse {
   const target = String(cmd.target || '');
   let sources = cmd.sources;
-  if (typeof sources === 'string') sources = sources.split('|').filter(Boolean);
+  if (typeof sources === 'string') {
+    // источники кодируются по отдельности (remote.ts), поэтому сначала декодируем каждый элемент —
+    // иначе имя группы, содержащее «|», было бы разбито на несколько групп
+    sources = sources.split('|').map(function (s: string): string {
+      try { return decodeURIComponent(s); } catch (e) { return s; }
+    }).filter(Boolean);
+  }
   if (!Array.isArray(sources)) sources = [];
   // перемещение каналов из скрытой под PIN группы требует авторизации — иначе пульт мог бы «слить» защищённую группу без PIN
-  const srcBlocked = sources.some(function (k: string): boolean { return blockedGroups.has(k); });
+  const srcBlocked = sources.some(function (k: string): boolean { return blockedGroups.has(blockKeyFromRemote(k)); });
   if (srcBlocked && !pinUnlocked) {
     if (!parentPin) return { ok: false, error: 'сначала задайте PIN' };
     if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
     pinUnlocked = true;
   }
   // нельзя перелить каналы в скрытую группу без PIN — это обошло бы защиту (каналы исчезли бы из меню)
-  if (target && blockedGroups.has(target) && !pinUnlocked) {
+  if (target && blockedGroups.has(blockKeyFromRemote(target)) && !pinUnlocked) {
     if (!verifyPin(cmd.pin)) return { ok: false, error: 'неверный PIN' };
     pinUnlocked = true;
   }
@@ -2319,8 +2350,11 @@ window.RemoteAPI = {
       if (name === 'group') { setGroup(cmd.key || GROUP_ALL); return remoteState(); }
       if (name === 'loadUrl') {
         const lu = String(cmd.url || '').trim();
-        if (!/^https?:\/\//i.test(lu)) return { ok: false, error: 'ссылка должна начинаться с http:// или https://' };
-        urlInput.value = lu; lsSet(LS_URL, lu); loadFromUrl();
+        // строгая проверка: парсим как URL и принимаем только http/https (regex пропускал «httpx://…»)
+        let parsedLu: URL;
+        try { parsedLu = new URL(lu); } catch (e) { return { ok: false, error: 'некорректная ссылка' }; }
+        if (parsedLu.protocol !== 'http:' && parsedLu.protocol !== 'https:') return { ok: false, error: 'ссылка должна начинаться с http:// или https://' };
+        urlInput.value = parsedLu.href; lsSet(LS_URL, parsedLu.href); loadFromUrl();
         return { ok: true, note: 'гружу плейлист по ссылке' };
       }
       if (name === 'export') { return { ok: true, m3u: buildM3uText(), count: state.channels.length }; }
@@ -2346,7 +2380,8 @@ window.RemoteAPI = {
         parentPin = newPin; lsSet('iptv.pin', parentPin); pinFailCount = 0; pinBlockedUntil = 0;
         if (!parentPin) pinUnlocked = false;
         buildGroups(); computeView(); renderGroups(); renderGrid(false); renderPinStatus();
-        return { ok: true, pinSet: !!parentPin };
+        // возвращаем полный снимок состояния (группы, каналы), чтобы render() на пульте получил валидные данные
+        return remoteState();
       }
       if (name === 'unlock') {
         if (!parentPin) return { ok: false, error: 'PIN не задан' };
