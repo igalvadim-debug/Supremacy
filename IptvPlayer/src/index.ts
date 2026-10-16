@@ -838,6 +838,33 @@ function pullNtfy(): void {
     .catch(function (): void { showToast(tr('Нет связи с ntfy'), 3500); });
 }
 
+/** A single entry from the GitHub contents API. */
+interface GhItem { type?: string; name?: string; download_url?: string; }
+const TRIAL_DIR_API = 'https://api.github.com/repos/igalvadim-debug/Aktien-Dividende/contents/opencloud_files/trial';
+/** On demand: fetch every file in the GitHub dropbox, merge, and save as a separate library playlist. */
+function pullFolder(): void {
+  showToast(tr('Читаю папку…'));
+  fetch(TRIAL_DIR_API, { cache: 'no-store' })
+    .then(function (r: Response): Promise<GhItem[]> { return r.ok ? (r.json() as Promise<GhItem[]>) : Promise.resolve([]); })
+    .then(function (items: GhItem[]): void {
+      const files = (items || []).filter(function (it: GhItem): boolean { return !!it && it.type === 'file' && !!it.download_url; });
+      if (!files.length) { showToast(tr('Папка пуста')); return; }
+      Promise.all(files.map(function (f: GhItem): Promise<string> {
+        return fetch(f.download_url as string, { cache: 'no-store' }).then(function (rr: Response): Promise<string> { return rr.ok ? rr.text() : Promise.resolve(''); });
+      })).then(function (texts: string[]): void {
+        const text = texts.filter(function (t: string): boolean { return !!t && !!t.trim(); }).join('\n');
+        if (!text.trim()) { showToast(tr('В папке нет данных')); return; }
+        let channels: Channel[] = [];
+        try { channels = parsePlaylist(text); } catch (e) { channels = []; }
+        if (!channels.length) { showToast(tr('В папке нет каналов')); return; }
+        saveEntry({ kind: 'file', key: 'trial-folder' }, tr('Из папки trial'), text, channels.length);
+        if (libraryOpen()) renderLibrary();
+        showToast(tr('Папка: сохранено {0} каналов', channels.length));
+      }).catch(function (): void { showToast(tr('Не удалось получить папку')); });
+    })
+    .catch(function (): void { showToast(tr('Не удалось получить папку')); });
+}
+
 /* ================= Группы и фильтр ================= */
 /** Returns the channel group, using GROUP_NONE for an empty group. */
 function gkey(ch: Channel): string { return ch.group || GROUP_NONE; }
@@ -1930,7 +1957,10 @@ $('clearCacheBtn').addEventListener('click', async function (): Promise<void> {
 srvChk.addEventListener('click', function (): void { setServer(!srv.running); });
 srvBtn.addEventListener('click', function (): void { setServer(!srv.running); });
 ntfyNewBtn.addEventListener('click', function (): void { setNtfyCode(genNtfyCode()); });
-ntfyPull.addEventListener('click', pullNtfy);
+ntfyPull.addEventListener('click', function (): void {
+  if (ntfyCode && !ntfyExpired()) pullNtfy();
+  pullFolder();
+});
 ntfyTokenSave.addEventListener('click', function (): void {
   ntfyServer = normNtfyServer(ntfyServerEl.value);
   ntfyToken = ntfyTokenEl.value.trim();
