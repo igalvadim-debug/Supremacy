@@ -24,6 +24,60 @@
     });
   }
 
+  // Remote-Pulse: команды пульта (/api/remote) буферизуются сервером; страница плеера
+  // забирает их этим поллингом, выполняет через window.RemoteAPI.handle() и отвечает
+  // через POST /native/result. Пауза опроса — когда команда уже выполняется
+  // (сериализация, как в Android-версии, где вызовы шли в UI-поток последовательно).
+  var pulseTimer = null;
+  var pulseBusy = false;
+
+  function runRemoteCommand(cmd) {
+    var api = window.RemoteAPI;
+    if (!api || typeof api.handle !== 'function') {
+      return Promise.resolve({ ok: false, error: 'нет RemoteAPI на странице' });
+    }
+    try {
+      return Promise.resolve(api.handle(cmd)).then(function (r) {
+        return r && typeof r === 'object' ? r : { ok: true };
+      });
+    } catch (e) {
+      return Promise.resolve({ ok: false, error: String((e && e.message) || e) });
+    }
+  }
+
+  function pulsePoll() {
+    if (pulseBusy) return;
+    json('/native/pulse?limit=5')
+      .then(function (data) {
+        var commands = (data && data.commands) || [];
+        if (!commands.length) return;
+        pulseBusy = true;
+        var chain = Promise.resolve();
+        var results = [];
+        commands.forEach(function (c) {
+          chain = chain.then(function () {
+            return runRemoteCommand(c.cmd).then(function (result) {
+              results.push({ id: c.id, result: result });
+            });
+          });
+        });
+        chain.then(function () {
+          pulseBusy = false;
+          return json('/native/result', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(results)
+          });
+        }).catch(function () { pulseBusy = false; });
+      })
+      .catch(function () { /* сервер недоступен — следующая попытка на следующем тике */ });
+  }
+
+  function startPulsePolling() {
+    if (pulseTimer) return;
+    pulseTimer = setInterval(pulsePoll, 700);
+  }
+
   // Player-Zustand wird vom Server gepollt; gleiche Eventform wie NativePlayerEvent.
   function startPolling() {
     if (pollTimer) return;

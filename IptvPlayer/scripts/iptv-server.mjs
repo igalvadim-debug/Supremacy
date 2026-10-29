@@ -30,8 +30,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 /* ================= константы (по образцу Java-версии) ================= */
-export const MAX_UPLOAD_BYTES = 400L * 1024L * 1024L;   // FileStore.MAX_BYTES
-export const MAX_READ_BYTES = 30L * 1024L * 1024L;      // IptvNativePlugin.MAX_PLAYLIST_BYTES
+export const MAX_UPLOAD_BYTES = 400 * 1024 * 1024;   // FileStore.MAX_BYTES (Java-литералы 400L убраны — в JS это синтаксическая ошибка)
+export const MAX_READ_BYTES = 30 * 1024 * 1024;      // IptvNativePlugin.MAX_PLAYLIST_BYTES
 export const PULSE_TIMEOUT_MS = 6000;                   // как latch.await(6 s) в callJs()
 const BACK_MS = 3 * 24 * 3600 * 1000;                   // окно EPG: назад
 const FWD_MS = 36 * 3600 * 1000;                        // окно EPG: вперёд
@@ -48,7 +48,8 @@ export function cleanName(raw) {
   let n = String(raw);
   const i = Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\'));
   if (i >= 0) n = n.slice(i + 1);
-  n = n.replace(/[\\/:*?"<>|\p{Cntrl}]/gu, '_').trim();
+  // \p{Cc} — категория «управляющие символы» (в JS нет \p{Cntrl}, это было вторым синтаксическим ошибкой)
+  n = n.replace(/[\\/:*?"<>|\p{Cc}]/gu, '_').trim();
   if (n.length > 120) n = n.slice(-120);
   if (!n || n === '.' || n === '..') return null;
   return n;
@@ -310,6 +311,7 @@ export class EpgIndex {
 
 /** Открывает сокет Unix-IPC mpv (обёртка над async-итератором net.Socket). */
 async function connectIpc(sockPath) {
+  const sock = net.createConnection();
   await new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error('ipc timeout')), 3000);
     const onOk = () => { clearTimeout(t); sock.off('error', onErr); res(); };
@@ -344,8 +346,9 @@ async function connectIpc(sockPath) {
 }
 
 export class ExternalPlayer {
-  constructor(dataDir) {
+  constructor(dataDir, spawnImpl) {
     this.dataDir = dataDir;
+    this.spawn = spawnImpl || spawn;   // можно подменить в тестах
     this.state = 'idle';       // idle | buffering | playing | paused | ended | error
     this.message = '';
     this.status = 0;           // код завершения процесса
@@ -354,6 +357,8 @@ export class ExternalPlayer {
     this.ipcPath = '';
     this._watchdog = null;
     this._session = 0;
+    this._binTried = new Set();      // какие бинарники уже запускались (для автопереключения)
+    this._fallbackHandler = null;    // вызывается при отсутствии mpv: (url, bufferMs) => Promise
   }
   _setState(s, message, status) {
     this.state = s;
@@ -375,7 +380,28 @@ export class ExternalPlayer {
     }
     if (this.ipcPath) { try { fs.unlinkSync(this.ipcPath); } catch (e) { /* нет файла */ } this.ipcPath = ''; }
   }
-  /** Запускает url внешним плеером; mpv предпочитается из-за IPC (pause/resume). */
+  /** Отслеживание живости процесса ffplay. Опрашивает pid сигналами 0/CONT:
+   *  пока процесс жив и не на паузе — статус «playing» (UI не зависает на «Загрузка»),
+   *  при SIGSTOP-паузе остаётся «paused», при завершении процесса мониторинг гаснет. */
+  _startAliveMonitor(session) {
+    clearInterval(this._alive);
+    this._alive = setInterval(() => {
+      if (session !== this._session) { clearInterval(this._alive); this._alive = null; return; }
+      const p = this.proc;
+      if (!p || p.exitCode != null) return;   // процесс завершился — состояние выставит обработчик exit
+      let alive = true, stopped = false;
+      try { process.kill(p.pid, 0); } catch (e) { alive = e.code !== 'ESRCH'; }
+      if (alive) {
+        try { process.kill(p.pid, 'CONT'); } catch (e) { stopped = e.code === 'EPERM'; } // EPERM ≈ остановленный (SIGSTOP) процесс
+      }
+      if (alive && !stopped && (this.state === 'buffering' || this.state === 'playing')) this._setState('playing');
+      if (alive && stopped && this.state === 'playing') this._setState('paused');
+    }, 250);
+    if (this._alive.unref) this._alive.unref();
+  }
+  _stopAliveMonitor() { clearInterval(this._alive); this._alive = null; }
+  /** Запускает url внешним плеером; mpv предпочитается из-за IPC (pause/resume),
+   *  но в режиме «auto» при отсутствии mpv автоматически переключается на ffplay. */
   async play(url, bufferMs, preferredBin) {
     if (!url) throw new Error('не указан url');
     const session = ++this._session;
@@ -384,22 +410,30 @@ export class ExternalPlayer {
     const bin = preferredBin === 'ffplay' ? 'ffplay' : 'mpv';
     try {
       if (bin === 'mpv') {
+        this._binTried.add('mpv');
         const ipcPath = path.join(this.dataDir, 'mpv-ipc-' + process.pid + '-' + session + '.sock');
-        const proc = spawn('mpv', [
-          '--no-video' , '--really-quiet', '--force-window=no',
+        const proc = this.spawn('mpv', [
+          '--really-quiet', '--force-window=yes', '--idle=no',
           '--input-ipc-server=' + ipcPath,
           '--cache=yes', '--demuxer-max-bytes=' + Math.max(1 << 20, (bufferMs || 1500) * 1000),
           url
-        ], { stdio: 'ignore' });
+        ], { stdio: 'ignore', env: Object.assign({}, process.env, { DISPLAY: process.env.DISPLAY || ':0' }) });
         this.proc = proc; this.ipcPath = ipcPath;
         proc.on('exit', (code) => {
           if (session !== this._session) return;
           this._setState(code === 0 || code == null ? 'ended' : 'error', code ? 'плеер завершился с кодом ' + code : '', code == null ? 0 : code);
           this._cleanupProcess();
         });
-        proc.on('error', () => {
+        proc.once('error', async (e) => {
           if (session !== this._session) return;
-          this._setState('error', 'mpv не найден в PATH');
+          if (e && e.code === 'ENOENT') {
+            // mpv не установлен — автопадение на ffplay (проблема №2: auto всегда брал mpv)
+            this._cleanupProcess();
+            if (this._fallbackHandler) { await this._fallbackHandler(url, bufferMs); return; }
+            await this.play(url, bufferMs, 'ffplay');
+            return;
+          }
+          this._setState('error', 'не удалось запустить mpv: ' + String(e && e.message || e));
         });
         // ждём IPC-сокет (появляется после старта mpv), затем подключаемся
         const appeared = await new Promise((res) => {
@@ -412,27 +446,36 @@ export class ExternalPlayer {
         if (session !== this._session) return { ok: false };
         if (appeared) {
           try {
-            const sock = net.createConnection();
-            this.ipc = await connectIpc(sock);
+            this.ipc = await connectIpc(ipcPath);
             const st = await this.ipc.send(['get_property', 'pausing']);
             if (st) this._setState('playing');
           } catch (e) { this.ipc = null; }
         }
         if (this.state === 'buffering') this._armWatchdog(session);
       } else {
-        const args = ['-nodisp', '-loglevel', 'quiet', '-autoexit'];
+        this._binTried.add('ffplay');
+        // Без -nodisp! Он выключал видеовыход (проблема №1). Нужны полноэкранный режим (-fs) и DISPLAY=:0.
+        const args = ['-loglevel', 'quiet', '-autoexit', '-fs'];
         if (bufferMs) args.push('-fflags', '+genpts');
         args.push(url);
-        const proc = spawn('ffplay', args, { stdio: 'ignore' });
+        const proc = this.spawn('ffplay', args, {
+          stdio: 'ignore',
+          env: Object.assign({}, process.env, { DISPLAY: process.env.DISPLAY || ':0' })
+        });
         this.proc = proc;
         proc.on('exit', (code) => {
           if (session !== this._session) return;
+          this._stopAliveMonitor();
           this._setState(code === 0 || code == null ? 'ended' : 'error', '', code == null ? 0 : code);
         });
-        proc.on('error', () => {
+        proc.once('error', (e) => {
           if (session !== this._session) return;
+          this._stopAliveMonitor();
           this._setState('error', 'ffplay не найден в PATH');
         });
+        // ffplay не имеет IPC: как только процесс жив ≥ полутакта — считаем поток играющим
+        // (проблема №3: status зависал на «buffering», интерфейс показывал бесконечную загрузку)
+        this._startAliveMonitor(session);
         this._armWatchdog(session);
       }
       return { ok: true };
@@ -444,16 +487,20 @@ export class ExternalPlayer {
   async pause() {
     if (this.ipc) { const ok = await this.ipc.send(['set_property', 'pause', true]); if (ok) { this._setState('paused'); return; } }
     if (this.proc) { try { this.proc.kill('SIGSTOP'); } catch (e) { /* ignore */ } }
+    this._stopAliveMonitor();   // иначе монитор вернёт статус в «playing» во время паузы
     this._setState('paused');
   }
   async resume() {
     if (this.ipc) { const ok = await this.ipc.send(['set_property', 'pause', false]); if (ok) { this._setState('playing'); return; } }
     if (this.proc) { try { this.proc.kill('SIGCONT'); } catch (e) { /* ignore */ } }
     this._setState('playing');
+    // для ffplay (без IPC) возобновляем контроль живости на случай внезапного завершения процесса
+    if (!this.ipc && this.proc) this._startAliveMonitor(this._session);
   }
   stop() {
     this._session++;
     clearTimeout(this._watchdog);
+    this._stopAliveMonitor();
     this._cleanupProcess();
     this._setState('idle');
   }
@@ -547,7 +594,7 @@ export function createServer(options = {}) {
   const stateFile = path.resolve(options.stateFile || path.join(os.homedir?.() || root, '.iptv-player', 'state.json'));
   const store = new FileStore(filesDir);
   const epg = new EpgIndex();
-  const player = new ExternalPlayer(path.dirname(stateFile));
+  const player = new ExternalPlayer(path.dirname(stateFile), options.spawn);
   const playerMode = options.playerMode || process.env.IPTV_PLAYER || 'auto';
   const usePlayer = playerMode !== 'off';
   const pulseQueue = [];   // команды пульта; страница забирает их через /native/pulse
