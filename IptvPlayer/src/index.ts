@@ -23,6 +23,13 @@ const HTTP_HEADERS = {
   'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
 };
 
+/** Разрешает URL относительно адреса внешнего плеера (Linux), иначе — относительно страницы. */
+function resolveUrl(u: string): string {
+  const base = window.IPTV_BRIDGE && window.IPTV_BRIDGE.playerBase;
+  if (!base) return u;
+  try { return new URL(u, base).href; } catch (e) { return u; }
+}
+
 /* ================= Элементы ================= */
 function $(id: string): NavElement { return requiredElement<NavElement>(id); }
 const urlInput = requiredElement<HTMLInputElement>('urlInput'), loadBtn = $('loadBtn'), fileInput = requiredElement<HTMLInputElement>('fileInput'), searchInput = requiredElement<HTMLInputElement>('searchInput');
@@ -1623,7 +1630,7 @@ function startNative(url: string, token: number, allowHlsFallback: boolean): voi
   };
   nativeErrHandler = handler;
   video.addEventListener('error', handler);
-  video.src = url;
+  video.src = resolveUrl(url);
   gatePlay(token, settings.bufferMs);
 }
 /**
