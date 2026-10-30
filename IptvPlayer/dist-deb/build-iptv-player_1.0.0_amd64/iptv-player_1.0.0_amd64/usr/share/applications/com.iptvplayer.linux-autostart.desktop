@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IPTV Player (Kiosk)
+Comment=IPTV Player im Kiosk-Modus (Autostart)
+Exec=/usr/bin/iptv-player-linux --autostart
+Terminal=false
+Icon=com.iptvplayer.linux
+Categories=AudioVideo;TV;Network;
+NoDisplay=true
+X-GNOME-Autostart-enabled=false

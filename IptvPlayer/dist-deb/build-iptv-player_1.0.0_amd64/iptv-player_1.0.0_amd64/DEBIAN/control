@@ -1,0 +1,17 @@
+Package: iptv-player
+Version: 1.0.0
+Architecture: amd64
+Maintainer: IPTV Player <dev@iptvplayer.local>
+Depends: nodejs (>= 18), xdg-utils
+Recommends: chromium | chromium-browser | google-chrome-stable | firefox-esr | firefox, libmpv1 | mpv
+Suggests: ffmpeg
+Installed-Size: 1272
+Section: utils
+Priority: optional
+Homepage: https://github.com/iptvplayer
+Description: IPTV Player für Linux: Node-Server + Kiosk-Browser (leichtgewichtiges .deb statt Electron)
+ Der IPTV Player läuft als lokaler Node-Server (Port 8080) mit Web-Oberfläche;
+ ein im App-/Kiosk-Modus gestarteter Browser dient als Fenster. Das ist
+ deutlich ressourcenschonender als ein Electron-Paket und nutzt vorhandene
+ Systembibliotheken. Features: M3U/M3U8-Playlists, EPG (XMLTV), Remote-Web-
+ Pult, Datei-Upload, mpv/ffplay-Wiedergabe, XDG-Autostart.

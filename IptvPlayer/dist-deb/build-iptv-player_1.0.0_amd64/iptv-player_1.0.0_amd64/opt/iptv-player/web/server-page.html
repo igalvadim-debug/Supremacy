@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPTV Player: файлы</title>
+<style>
+  :root { --bg:#0b0f19; --panel:#131a2b; --line:#2a3a5c; --text:#eaf0fb; --muted:#8f9bb5; --accent:#35c4ff; --accent2:#7a6cff; --ok:#5ee19a; --err:#ff7b8b; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:1.5rem 1rem 3rem; background: radial-gradient(circle at 15% 0%, #172a4a 0, var(--bg) 40rem); color:var(--text);
+    font-family: Roboto, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 48rem; margin: 0 auto; }
+  h1 { margin:0 0 .3rem; font-size:1.7rem; letter-spacing:.04em; }
+  h1 span { color: var(--accent); }
+  h2 { margin:2rem 0 .7rem; font-size:1.15rem; }
+  .sub { margin:0 0 1.2rem; color: var(--muted); }
+  #drop { padding:2.2rem 1rem; text-align:center; border:.15rem dashed var(--line); border-radius:1rem; background: rgba(19,26,43,.8); color: var(--muted); transition: .15s; }
+  #drop.over { border-color: var(--accent); color: var(--text); background: rgba(53,196,255,.08); }
+  #drop label { color: var(--accent); font-weight: 700; cursor: pointer; text-decoration: underline; }
+  /* Скрытое, но доступное с клавиатуры поле — остаётся в фокусе (в отличие от display:none) */
+  #pick { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
+  /* Видимая индикация фокуса для клавиатурной навигации */
+  #pick:focus-visible + label, #drop label:focus-visible { outline:.2rem solid var(--accent); outline-offset:.2rem; border-radius:.3rem; }
+  #drop:focus-within { border-color: var(--accent); box-shadow: 0 0 0 .2rem rgba(53,196,255,.35); }
+  .item { display:flex; align-items:center; gap:.8rem; padding:.7rem .9rem; margin-bottom:.5rem; border:.1rem solid var(--line); border-radius:.7rem; background: var(--panel); }
+  .item .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .item .name a { color: var(--text); text-decoration:none; }
+  .item .name a:hover { color: var(--accent); }
+  .item .meta { color: var(--muted); font-size:.85rem; white-space:nowrap; }
+  .item button { height:2.2rem; padding:0 .9rem; border:0; border-radius:.5rem; cursor:pointer; color:#fff; font-weight:700; background:#3a2631; }
+  .item button:hover { background:#7b2c3c; }
+  .bar { flex:0 0 9rem; height:.5rem; border-radius:.3rem; background:#0a1120; overflow:hidden; }
+  .bar b { display:block; height:100%; width:0; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+  .empty { padding:1.5rem; text-align:center; color: var(--muted); }
+  #qrs { display:flex; gap:1rem; flex-wrap:wrap; margin:0 0 1.2rem; }
+  .qrcard { flex:1 1 11rem; padding:.8rem; border:.1rem solid var(--line); border-radius:.8rem; background: var(--panel); text-align:center; }
+  .qrcard b { display:block; margin-bottom:.5rem; }
+  .qrcard .qr svg { width:9rem; height:9rem; background:#fff; border-radius:.5rem; padding:.3rem; }
+  .qrcard .url { margin-top:.4rem; color: var(--muted); font-size:.8rem; word-break:break-all; }
+
+  .langbar { display:flex; gap:.4rem; margin:.1rem 0 .3rem; }
+  .flagbtn { display:flex; align-items:center; gap:.35rem; height:2rem; min-width:0; padding:0 .6rem; border:0; border-radius:.5rem; color:#fff; font-size:.85rem; font-weight:700; cursor:pointer; background:#243254; }
+  .flagbtn .flag svg { display:block; width:1.6rem; height:1.1rem; border-radius:.15rem; }
+  .flagbtn.on { box-shadow:0 0 0 .15rem var(--accent); }
+</style>
+  <script type="module" crossorigin src="/assets/server-page-BzYUPKcY.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/i18n-CDW59qI4.js">
+</head>
+<body>
+<main>
+  <div class="langbar" id="langBtns"></div>
+  <h1>IPTV <span>Player</span><span data-i18n>: файлы</span></h1>
+  <p class="sub" data-i18n>Плейлисты .m3u, .m3u8 и телепрограмма .xml, .xml.gz. Файлы сохраняются в папку «Загрузки / IPTV Player» на устройстве.</p>
+
+  <div id="qrs">
+    <div class="qrcard"><b data-i18n>Загрузка файлов</b><div id="qrUpload" class="qr"></div><div class="url" data-i18n>Наведите камеру телефона: откроется эта страница</div></div>
+    <div class="qrcard"><b data-i18n>Пульт</b><div id="qrRemote" class="qr"></div><div class="url" data-i18n>Наведите камеру телефона: откроется пульт</div></div>
+  </div>
+
+  <div id="drop"><span data-i18n>Перетащите файлы сюда или</span> <label for="pick" data-i18n>выберите на компьютере</label><input id="pick" type="file" multiple accept=".m3u,.m3u8,.xml,.gz"></div>
+  <div id="uploads" style="margin-top:1rem"></div>
+
+  <h2 data-i18n>Файлы на устройстве</h2>
+  <div id="list"><div class="empty" data-i18n>Загрузка…</div></div>
+</main>
+</body>
+</html>
+

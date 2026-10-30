@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IPTV Player
+Comment=IPTV Player für Linux: Node-Server + Kiosk-Browser (leichtgewichtiges .deb statt Electron)
+Exec=/usr/bin/iptv-player-linux
+Terminal=false
+Icon=com.iptvplayer.linux
+Categories=AudioVideo;TV;Network;
+Keywords=iptv;tv;streaming;m3u;epg;
+StartupWMClass=iptv-player

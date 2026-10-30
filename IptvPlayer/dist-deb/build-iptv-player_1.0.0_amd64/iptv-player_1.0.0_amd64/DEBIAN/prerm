@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+# laufenden Server des Pakets beenden (nur PID aus unserer Datei)
+for d in $HOME /home/*; do
+  pf="$d/.local/share/iptv-player/server.pid"
+  if [ -f "$pf" ]; then
+    pid=$(cat "$pf" 2>/dev/null || true)
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    rm -f "$pf"
+  fi
+done
+exit 0
