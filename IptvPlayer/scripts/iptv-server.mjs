@@ -42,6 +42,48 @@ const UA = 'IPTVPlayer/1.0 (Linux)';
 
 /* ================= утилиты ================= */
 
+/* ---------- автозапуск (XDG Autostart для Linux) ---------- */
+export const AUTOSTART_APP_ID = 'com.iptvplayer.linux';
+
+/** Путь .desktop-файла автозапуска (XDG Autostart: ~/.config/autostart). */
+export function autostartDesktopPath() {
+  const cfg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(cfg, 'autostart', AUTOSTART_APP_ID + '.desktop');
+}
+
+/** Команда автозапуска: бинарник iptv-player-linux из deb, иначе — node с абсолютным путём к серверу. */
+export function autostartExecCommand() {
+  const bin = '/usr/bin/iptv-player-linux';
+  if (fs.existsSync(bin)) return bin;
+  // режим разработки: тот же сервер через node (пути в кавычках —-safe для .desktop Exec)
+  return '"' + process.execPath + '" "' + path.join(PROJECT_ROOT, 'scripts', 'iptv-server.mjs') + '"';
+}
+
+/** Включает/выключает автозапуск, создавая или удаляя .desktop в ~/.config/autostart. Возвращает итоговое состояние. */
+export function applyAutostart(on, execOverride) {
+  const fp = autostartDesktopPath();
+  if (!on) {
+    try { fs.unlinkSync(fp); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    return false;
+  }
+  const exec = execOverride || process.env.IPTV_AUTOSTART_EXEC || autostartExecCommand();
+  const content = [
+    '[Desktop Entry]',
+    'Type=Application',
+    'Name=IPTV Player',
+    'Comment=IPTV Player (Linux) — медиа-сервер и пульт',
+    'Exec=' + exec,
+    'Terminal=false',
+    'Icon=' + AUTOSTART_APP_ID,
+    'Categories=AudioVideo;',
+    'X-GNOME-Autostart-enabled=true',
+    ''
+  ].join('\n');
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, content, 'utf8');
+  return true;
+}
+
 /** Безопасное имя файла: без путей и запрещённых символов (аналог FileStore.clean). */
 export function cleanName(raw) {
   if (raw == null) return null;
@@ -711,7 +753,9 @@ export function createServer(options = {}) {
     try { bridgeSrc = fs.readFileSync(path.join(root, 'scripts', 'linux-bridge.js'), 'utf8'); }
     catch (e) { bridgeSrc = '/* linux-bridge.js не найден */'; }
     const port = web.port || 8080;
-    const head = '<script>window.IPTV_BRIDGE={playerBase:"http://127.0.0.1:' + port + '/"};</script>\n' +
+    // serverBase — абсолютный адрес этого сервера: мост (linux-bridge.js) шлёт /native/* сюда,
+    // даже если страницу открыли по localhost/IP из другой среды.
+    const head = '<script>window.IPTV_BRIDGE={playerBase:"http://127.0.0.1:' + port + '/",serverBase:"http://127.0.0.1:' + port + '/"};</script>\n' +
       '<script>' + bridgeSrc.replace(/<\/script>/gi, '<\\/script>') + '</script>';
     if (/<head>/i.test(html)) return html.replace(/<head>/i, '<head>\n' + head);
     return head + '\n' + html;
@@ -756,13 +800,23 @@ export function createServer(options = {}) {
     if (key === 'server/start' && method === 'POST') {
       const body = await parseJsonBody(req).catch(() => ({}));
       const p = parseInt(body.port, 10);
-      if (p >= 1024 && p <= 65535) { persisted.serverPort = p; persisted.serverOn = true; saveState(); }
+      // на Linux сервер — это само приложение: пересоздаём .desktop автозапуска с новым портом
+      let cmd = 'node "' + path.join(root, 'scripts', 'iptv-server.mjs') + '"';
+      try {
+        const cli = fs.realpathSync(process.execPath);
+        if (/[/\\]node$/.test(cli)) cmd = '"' + cli + '" "' + path.join(root, 'scripts', 'iptv-server.mjs') + '"';
+      } catch (e) { /* оставляем «node» */ }
+      if (p >= 1024 && p <= 65535) {
+        persisted.serverPort = p; persisted.serverOn = true; saveState();
+        cmd += ' --port ' + p;
+        try { if (persisted.autostart) applyAutostart(true, cmd); } catch (e) { /* не критично */ }
+      }
       sendJson(res, 200, statusObj());
       return;
     }
     if (key === 'server/stop' && method === 'POST') {
       persisted.serverOn = false; saveState();
-      sendJson(res, 200, statusObj());
+      sendJson(res, 200, Object.assign(statusObj(), { note: 'На Linux сервер останавливается вместе с приложением (закрытие терминала или systemctl stop iptv-player).' }));
       return;
     }
 
@@ -770,8 +824,13 @@ export function createServer(options = {}) {
     if (key === 'autostart' && method === 'GET') { sendJson(res, 200, { on: !!persisted.autostart }); return; }
     if (key === 'autostart' && method === 'POST') {
       const body = await parseJsonBody(req);
-      persisted.autostart = !!body.on; saveState();
-      sendJson(res, 200, { on: persisted.autostart });
+      // реально включаем/выключаем автозапуск через ~/.config/autostart (XDG Autostart)
+      let autostartApplied = false, autostartError = '';
+      try {
+        autostartApplied = applyAutostart(!!body.on);
+      } catch (e) { autostartError = String((e && e.message) || e); }
+      persisted.autostart = autostartApplied; saveState();
+      sendJson(res, 200, { on: autostartApplied, error: autostartError });
       return;
     }
     if (key === 'cache/clear' && method === 'POST') {

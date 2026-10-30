@@ -13,7 +13,7 @@ declare global {
     __iptvMenu?: () => void;
     RemoteAPI?: { handle(cmd: RemoteCommand): RemoteResponse };
     /** Задаётся сборкой при запуске; на Linux его пишет scripts/iptv-server.mjs в index.html. */
-    IPTV_BRIDGE?: { playerBase?: string };
+    IPTV_BRIDGE?: { playerBase?: string; serverBase?: string };
   }
   const Capacitor: CapacitorGlobal | undefined;
 }

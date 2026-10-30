@@ -7,8 +7,18 @@
   var listeners = {};
   var pollTimer = null;
 
-  function json(url, opts) {
-    return fetch(url, opts).then(function (r) {
+  // Все запросы идут на локальный сервер, который отдал эту страницу.
+  // window.IPTV_BRIDGE.serverBase задаётся injectBridge() в iptv-server.mjs;
+  // при ручном открытии dist/index.html без сервера считаем базой саму страницу.
+  function base() {
+    var b = window.IPTV_BRIDGE && window.IPTV_BRIDGE.serverBase;
+    if (!b) { try { b = new URL('.', window.location.href).href; } catch (e) { b = '/'; } }
+    return b;
+  }
+  function url(p) { return base() + p; }
+
+  function json(u, opts) {
+    return fetch(u, opts).then(function (r) {
       if (!r.ok) {
         return r.text().then(function (t) {
           throw new Error(t || ('HTTP ' + r.status));
@@ -47,7 +57,7 @@
 
   function pulsePoll() {
     if (pulseBusy) return;
-    json('/native/pulse?limit=5')
+    json(url('/native/pulse?limit=5'))
       .then(function (data) {
         var commands = (data && data.commands) || [];
         if (!commands.length) return;
@@ -63,7 +73,7 @@
         });
         chain.then(function () {
           pulseBusy = false;
-          return json('/native/result', {
+          return json(url('/native/result'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(results)
@@ -83,7 +93,7 @@
     if (pollTimer) return;
     var last = '';
     pollTimer = setInterval(function () {
-      json('/native/player/state')
+      json(url('/native/player/state'))
         .then(function (s) {
           var key = JSON.stringify(s);
           if (key === last) return;
@@ -95,45 +105,45 @@
   }
 
   var IptvNative = {
-    readFile: function (o) { return json('/native/files/' + encodeURIComponent(o.name)); },
-    listFiles: function () { return json('/native/files'); },
+    readFile: function (o) { return json(url('/native/files/') + encodeURIComponent(o.name)); },
+    listFiles: function () { return json(url('/native/files')); },
     deleteFile: function (o) {
-      return json('/native/files/' + encodeURIComponent(o.name), { method: 'DELETE' });
+      return json(url('/native/files/') + encodeURIComponent(o.name), { method: 'DELETE' });
     },
     writeFile: function (o) {
-      return json('/native/files/' + encodeURIComponent(o.name), {
+      return json(url('/native/files/') + encodeURIComponent(o.name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: o.text })
       });
     },
-    serverStatus: function () { return json('/native/server/status'); },
+    serverStatus: function () { return json(url('/native/server/status')); },
     serverStart: function (o) {
-      return json('/native/server/start', {
+      return json(url('/native/server/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ port: o.port })
       });
     },
-    serverStop: function () { return json('/native/server/stop', { method: 'POST' }); },
+    serverStop: function () { return json(url('/native/server/stop'), { method: 'POST' }); },
     epgLoad: function (o) {
-      return json('/native/epg/load', {
+      return json(url('/native/epg/load'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(o)
       });
     },
-    epgLookup: function (o) { return json('/native/epg/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) }); },
-    epgSchedule: function (o) { return json('/native/epg/schedule?' + new URLSearchParams(o), undefined); },
-    getAutoStart: function () { return json('/native/autostart'); },
+    epgLookup: function (o) { return json(url('/native/epg/lookup'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) }); },
+    epgSchedule: function (o) { return json(url('/native/epg/schedule?') + new URLSearchParams(o), undefined); },
+    getAutoStart: function () { return json(url('/native/autostart')); },
     setAutoStart: function (o) {
-      return json('/native/autostart', {
+      return json(url('/native/autostart'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ on: !!o.on })
       });
     },
-    clearCache: function () { return json('/native/cache/clear', { method: 'POST' }); }
+    clearCache: function () { return json(url('/native/cache/clear'), { method: 'POST' }); }
   };
 
   var IptvPlayer = {
@@ -146,15 +156,15 @@
     },
     removeAllListeners: function () { listeners = {}; return Promise.resolve(); },
     play: function (o) {
-      return json('/native/player/play', {
+      return json(url('/native/player/play'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(o)
       });
     },
-    stop: function () { return json('/native/player/stop', { method: 'POST' }); },
-    pause: function () { return json('/native/player/pause', { method: 'POST' }); },
-    resume: function () { return json('/native/player/resume', { method: 'POST' }); },
+    stop: function () { return json(url('/native/player/stop'), { method: 'POST' }); },
+    pause: function () { return json(url('/native/player/pause'), { method: 'POST' }); },
+    resume: function () { return json(url('/native/player/resume'), { method: 'POST' }); },
     // Reines Video wird im Browser-<video> abgespielt; ein natives Overlay gibt es nicht.
     setBounds: function () { return Promise.resolve(); },
     setVisible: function () { return Promise.resolve(); }

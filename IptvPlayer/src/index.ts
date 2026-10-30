@@ -1922,6 +1922,15 @@ function closeSettings(): void {
   setFocus(settingsBtn, false);
   if (settings.bufferMs !== bufAtOpen && state.current) playChannel(state.current);   // применить новый буфер сразу
 }
+/** На Linux сервер запущен всегда: «Включить сервер» открывает настройки, «Выключить» — свёрнуто (останов = выход из приложения). */
+function isLinuxBridge(): boolean {
+  const C = window.Capacitor as unknown as { getPlatform?: () => string } | undefined;
+  return !!(C && typeof C.getPlatform === 'function' && C.getPlatform() === 'linux');
+}
+function onServerToggleClick(): void {
+  if (isLinuxBridge() && !srv.running) { openSettings(); return; }
+  setServer(!srv.running);
+}
 bufRange.addEventListener('input', function (): void { setBuffer(bufRange.value); });
 bufNum.addEventListener('change', function (): void { setBuffer(bufNum.value); });
 autoChk.addEventListener('change', function (): void {
